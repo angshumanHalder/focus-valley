@@ -1,8 +1,15 @@
-import { SubmitEvent, useEffect, useReducer, useState } from "react";
-import { initialTimer, timerReducer } from "../reducers/timer";
+import { SubmitEvent, useEffect, useReducer, useRef, useState } from "react";
+import { initialTimer, timerReducer, type CompletedFocus } from "../reducers/timer";
 
-export const FocusForm = () => {
+type FocusFormProps = {
+  target: { areaId: number; tileId: number } | null;
+  onFocusComplete: (focus: CompletedFocus) => void;
+  onFocusActiveChange: (active: boolean) => void;
+};
+
+export const FocusForm = ({ target, onFocusComplete, onFocusActiveChange }: FocusFormProps) => {
   const [timer, dispatch] = useReducer(timerReducer, initialTimer);
+  const handledCompletions = useRef(0);
   const [now, setNow] = useState(Date.now);
   const [duration, setDuration] = useState("25");
   const [customMinutes, setCustomMinutes] = useState("30");
@@ -18,12 +25,24 @@ export const FocusForm = () => {
     return () => window.clearInterval(interval);
   }, [timer.status]);
 
+  useEffect(() => {
+    if (timer.lastCompletedFocus && handledCompletions.current < timer.completedFocusDurationsMs.length) {
+      handledCompletions.current = timer.completedFocusDurationsMs.length;
+      onFocusComplete(timer.lastCompletedFocus);
+    }
+  }, [timer.lastCompletedFocus, timer.completedFocusDurationsMs.length, onFocusComplete]);
+
+  useEffect(() => {
+    onFocusActiveChange(timer.kind === "focus" && timer.status !== "idle");
+  }, [timer.kind, timer.status, onFocusActiveChange]);
+
   const startFocus = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const minutes = Number(duration === "custom" ? customMinutes : duration);
     const time = Date.now();
     setNow(time);
-    dispatch({ type: "startFocus", label, minutes, now: time });
+    if (!target) return;
+    dispatch({ type: "startFocus", label, minutes, now: time, target });
   };
 
   const remainingMs =
@@ -121,7 +140,7 @@ export const FocusForm = () => {
               />
             </div>
           )}
-          <button type="submit" className="primary">
+          <button type="submit" className="primary" disabled={!target}>
             Start focus
           </button>
         </form>

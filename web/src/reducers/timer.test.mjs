@@ -63,9 +63,13 @@ test('fourth break uses the last four completed focus durations, capped at 15 mi
 })
 
 test('paused wall time is excluded from a completed focus duration', () => {
-  let state = timerReducer(initialTimer, { type: 'startFocus', label: 'Work', minutes: 2, now: 0 })
+  let state = timerReducer(initialTimer, { type: 'startFocus', label: 'Work', minutes: 2, now: 0, target: { areaId: 0, tileId: 2 } })
   state = timerReducer(state, { type: 'pause', now: 30_000 })
   state = timerReducer(state, { type: 'resume', now: 600_000 })
-  state = timerReducer(state, { type: 'tick', now: 690_000 })
+  state = timerReducer(state, { type: 'tick', now: 700_000 })
   assert.deepEqual(state.completedFocusDurationsMs, [120_000])
+  assert.deepEqual(state.lastCompletedFocus, {
+    label: 'Work', durationMs: 120_000, target: { areaId: 0, tileId: 2 },
+    intervals: [{ startMs: 0, endMs: 30_000 }, { startMs: 600_000, endMs: 690_000 }],
+  })
 })

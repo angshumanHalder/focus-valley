@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import "./style.css";
-import { FocusForm } from "./components/FocusForm";
+import { GuestFarm } from "./components/GuestFarm";
 
 function App() {
   return (
@@ -11,9 +11,7 @@ function App() {
         <p>Settle into a focus session. Your farm will grow here soon.</p>
       </header>
 
-      <section aria-labelledby="timer-heading" className="timer-panel">
-        <FocusForm />
-      </section>
+      <GuestFarm />
     </main>
   );
 }
