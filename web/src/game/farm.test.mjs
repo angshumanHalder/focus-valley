@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  assignFocusCredit, chooseTree, completeFocus, createFarm, growthStage,
+  activeBed, assignFocusCredit, chooseTree, completeFocus, createFarm, growthStage,
   openFarmDay, plantCrop, SEASON_CONTENT,
 } from './farm.ts'
 import { initialTimer, timerReducer } from '../reducers/timer.ts'
@@ -18,6 +18,8 @@ test('crop visuals advance every five minutes through harvest', () => {
 test('four tiles unlock each area, harvests unlock animals, and trees need completed areas', () => {
   let farm = createFarm(at('2026-04-01T00:00:00Z'), 'UTC')
   assert.equal(farm.progress.unlockedAreaCount, 1)
+  assert.deepEqual(activeBed(farm), { areaId: 0, tileId: 0 })
+  assert.throws(() => plantCrop(farm, 0, 1, 'strawberry'))
   assert.throws(() => plantCrop(farm, 1, 0, 'strawberry'))
   assert.throws(() => plantCrop(farm, 0, 0, 'tomato'))
   assert.throws(() => chooseTree(farm, 0, 'apple'))
@@ -26,11 +28,14 @@ test('four tiles unlock each area, harvests unlock animals, and trees need compl
     for (let tileId = 0; tileId < 4; tileId++) {
       const startMs = at('2026-04-01T00:00:00Z') + (areaId * 4 + tileId) * 3_600_000
       farm = plantCrop(farm, areaId, tileId, 'strawberry')
+      assert.throws(() => plantCrop(farm, areaId, tileId + 1, 'peas'))
       assert.throws(() => plantCrop(farm, areaId, tileId, 'peas'))
       farm = completeFocus(farm, areaId, tileId, [{ startMs, endMs: startMs + 3_600_000 }]).farm
       const tile = farm.farmDay.tiles.find(tile => tile.areaId === areaId && tile.tileId === tileId)
       assert.equal(tile.harvested, true)
       assert.equal(growthStage(tile), 12)
+      assert.deepEqual(activeBed(farm), areaId === 3 && tileId === 3 ? null :
+        tileId === 3 ? { areaId: areaId + 1, tileId: 0 } : { areaId, tileId: tileId + 1 })
     }
     assert.equal(farm.progress.unlockedAreaCount, Math.min(4, areaId + 2))
     farm = chooseTree(farm, areaId, 'apple')
@@ -59,6 +64,7 @@ test('growth stages, credit leftovers, and crop beds reset on a new farm day', (
   assert.equal(before.farmDay.tiles[0].focusSeconds, 900)
   assert.equal(transition.closedDays[0].tiles[0].focusSeconds, 900)
   assert.deepEqual(farm.farmDay.tiles, [])
+  assert.deepEqual(activeBed(farm), { areaId: 0, tileId: 0 })
   assert.equal(farm.progress.activeDaysInSeason, 1)
   assert.equal(farm.progress.totalActiveDays, 1)
 

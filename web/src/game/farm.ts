@@ -102,6 +102,14 @@ export function openFarmDay(farm: FarmState, nowMs: number): FarmTransition {
   return advanceToDate(farm, dateInZone(nowMs, dateFormatter(farm.timeZone)));
 }
 
+export function activeBed(farm: FarmState): { areaId: number; tileId: number } | null {
+  for (let areaId = 0; areaId < farm.progress.unlockedAreaCount; areaId++)
+    for (let tileId = 0; tileId < 4; tileId++)
+      if (!farm.farmDay.tiles.some(tile => tile.areaId === areaId && tile.tileId === tileId && tile.harvested))
+        return { areaId, tileId };
+  return null;
+}
+
 function checkTile(farm: FarmState, areaId: number, tileId: number): void {
   if (
     !Number.isInteger(areaId) ||
@@ -113,6 +121,9 @@ function checkTile(farm: FarmState, areaId: number, tileId: number): void {
   ) {
     throw new RangeError("Tile is not unlocked");
   }
+  const next = activeBed(farm);
+  if (next?.areaId !== areaId || next.tileId !== tileId)
+    throw new RangeError("Use the next crop bed in order");
 }
 
 export function plantCrop(
@@ -157,7 +168,7 @@ function growTile(
     (tile) => tile.areaId === areaId && tile.tileId === tileId,
   );
   if (tileIndex < 0 || farm.farmDay.tiles[tileIndex].harvested)
-    throw new Error("Select a planted, growing tile");
+    throw new Error("Plant the current crop bed first");
   const tile = farm.farmDay.tiles[tileIndex];
   const usedSeconds = roundSeconds(Math.min(seconds, 3600 - tile.focusSeconds));
   const focusSeconds = roundSeconds(tile.focusSeconds + usedSeconds);
@@ -287,11 +298,11 @@ export function completeFocus(
   const formatter = dateFormatter(farm.timeZone);
   const targetDate = farm.farmDay.date;
   checkTile(farm, areaId, tileId);
-  const selectedTile = farm.farmDay.tiles.find(
+  const currentTile = farm.farmDay.tiles.find(
     (tile) => tile.areaId === areaId && tile.tileId === tileId,
   );
-  if (!selectedTile || selectedTile.harvested)
-    throw new Error("Select a planted, growing tile");
+  if (!currentTile || currentTile.harvested)
+    throw new Error("Plant the current crop bed first");
   const focusSecondsByDate: Record<string, number> = {};
   const closedDays: FarmDay[] = [];
   let previousEnd = -Infinity;
