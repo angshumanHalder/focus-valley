@@ -1,0 +1,129 @@
+{
+  "generator": "built-in image_gen",
+  "assets": [
+    {
+      "name": "summer-roster",
+      "file": "exec-e93080bf-5de9-4330-8f65-4b64c0b3e1d5.png",
+      "prompt": "Use case: stylized-concept. Create a transparent pixel-art SUMMER asset sheet for Focus Valley, matching the attached reference sprites' cozy detailed pixel clusters, rich outlines and high angled top view with visible fronts, horizontal ground axes, original artwork. Reference images are style references only. Large landscape sheet, evenly spaced isolated assets, no text, no background, no fence, no overlapping sprites. Top row four fully grown crops: tomato plant with red tomatoes, corn stalk with ripe ears, pepper plant with red peppers, sunflower. Second row cow four consistent animation poses: standing, left step, right step, blink. Third row goat four consistent animation poses: standing, left step, right step, blink. Bottom row three tall distinct mature trees: mango bearing mangoes, lemon bearing lemons, coconut palm bearing coconuts. All feet/root anchors aligned per row, generous transparent gutters. Keep animal character proportions and pixel treatment consistent with chicken reference; cows visibly larger than small poultry. Crisp readable silhouettes for small game rendering.",
+      "size": [
+        1536,
+        1024
+      ],
+      "png_color_type": 6
+    },
+    {
+      "name": "rainy-roster",
+      "file": "exec-a37b071c-dd97-4e46-a936-1170f718ed82.png",
+      "prompt": "Use case: stylized-concept. Pixel-art RAINY SEASON sprite atlas for a cozy farm game. Match attached crop and chicken references as style only: crisp clustered pixels, dark outlines, high angled overhead view showing fronts, no diamond projection. Isolated cutout sprites on completely TRANSPARENT background, no glow, no gradient or colored backdrop. Four rows, generous empty gutters and aligned feet. Row 1 four mature crops: golden rice clump, okra with upright green pods, eggplant bush with purple fruit, bottle gourd vine on a simple wooden trellis with hanging pale green gourds. Row 2 four white duck poses: idle, left-facing step, right-facing step, blink. Row 3 four charcoal water buffalo poses: idle, left-facing step, right-facing step, blink; broad curved horns, heavy body. Row 4 three mature trees: guava with green fruit, jackfruit with large textured fruit on trunk, jamun with purple fruit. Keep each species consistent between poses. All assets fully in frame with margins. No text, ground, scenery, fence or labels.",
+      "size": [
+        1402,
+        1122
+      ],
+      "png_color_type": 6
+    },
+    {
+      "name": "autumn-roster",
+      "file": "exec-6f142d11-4871-43da-8112-1ede9843c182.png",
+      "prompt": "Use case: stylized-concept. Transparent pixel-art AUTUMN sprite atlas for Focus Valley. Match attached reference sprites: cozy crisp detailed pixel clusters, dark outlines, high angled overhead view with visible fronts. Four rows with generous transparent gutters and aligned feet. Row 1 mature pumpkin vine with orange pumpkin, carrot with visible orange root shoulder and leafy top, sweet potato vine with visible tuber shoulder, blooming orange marigold. Row 2 four pink pig poses: front idle, left-facing step, right-facing step, front blink. Row 3 four turkey poses: front idle, left-facing step, right-facing step, front blink; recognizable brown fan tail and red wattle. Row 4 three mature trees: red-orange maple, golden pear tree with pears, orange persimmon tree with fruits. All sprites isolated completely within frame, no text, no ground, no scenery, no gradient, no glow, genuine alpha transparency. Consistent character identity across each animal row.",
+      "size": [
+        1536,
+        1024
+      ],
+      "png_color_type": 6
+    },
+    {
+      "name": "winter-roster",
+      "file": "exec-96193f55-1d99-4368-8d87-964525b3b9ea.png",
+      "prompt": "Use case: stylized-concept. WINTER game sprite sheet, original cozy detailed pixel art matching provided style references. Actual transparent alpha cutouts, absolutely no colored halo, glow, backdrop or gradients. Four orderly rows with large empty gutters. Row 1 four mature crops: pale green cabbage, white cauliflower in leaves, dark green spinach rosette, golden wheat clump. Row 2 four woolly white sheep poses: front idle, left walking, right walking, front blink. Row 3 four shaggy dark brown yak poses with horns: front idle, left walking, right walking, front blink. Row 4 three recognizable evergreen trees lightly dusted in snow: tall sparse pine, dense conical fir, broad layered cedar. Keep trunks visible, assets wholly within canvas. High angled top-down camera with visible fronts, horizontal ground axes, crisp pixel clusters, warm outlines, animal proportions matching chicken reference. No labels, no text, no landscape or ground beneath assets.",
+      "size": [
+        1536,
+        1024
+      ],
+      "png_color_type": 6
+    },
+    {
+      "name": "spring-growth",
+      "file": "exec-cd0f227e-dc07-431f-a10e-ceb99434c6eb.png",
+      "prompt": "Create a transparent pixel-art game crop growth atlas. EXACTLY 4 ROWS and 13 COLUMNS of equal-sized cells, 52 distinct frames total. Wide canvas. Row 1 strawberry, row 2 peas, row 3 radish, row 4 tulip. Each row goes left to right through 13 stages: planted seed at 0 minutes, then 5,10,15,20,25,30,35,40,45,50,55,60 minutes. First tiny sprout, gradually larger leaves, buds, flowers then ripe red strawberry / green pea pods / pink radish shoulder / pink tulip flower. Match provided detailed pixel-art style, high angled overhead camera with visible fronts. All frames bottom-center anchored on exactly same baseline within each row, same scale throughout each crop, consistent plant identity. Root stays in fixed spot while foliage grows. Keep each plant within its cell with empty gutters. No text, labels, numbers, grid lines, background, gradient, glow, ground patches or shadows. Actual transparent alpha background. This is source art for individual animation-frame extraction, not a scene.",
+      "size": [
+        2020,
+        779
+      ],
+      "png_color_type": 6
+    },
+    {
+      "name": "summer-growth",
+      "file": "exec-43ab461f-100c-42bb-951b-5c1083d3cd96.png",
+      "prompt": "Use case: stylized-concept. Transparent SUMMER crop-growth source atlas for cozy pixel-art farm game. Exactly 4 rows x 13 columns, 52 isolated sprites on wide canvas. Row1 tomato, row2 corn, row3 pepper, row4 sunflower. Thirteen stages per row represent 0,5,10,15,20,25,30,35,40,45,50,55,60 focus minutes: planted seed, tiny sprout, increasing leaves and height, buds, bloom, immature fruit, mature red tomatoes / golden corn ears / red peppers / yellow sunflowers. Same plant identity and world scale through each row. Bottom-center roots aligned to a constant baseline; generous equal empty gutters, no touching or overlapping sprites. Match reference pixel clusters, dark organic outlines, rich greens, high angled overhead view showing fronts. No labels, no grid lines, no backdrop, no glow, no gradients, no ground patches. True alpha transparency, all 52 frames fully inside canvas.",
+      "size": [
+        2022,
+        778
+      ],
+      "png_color_type": 6
+    },
+    {
+      "name": "rainy-growth",
+      "file": "exec-f66e85e4-faf4-4aa8-9ee7-0deedb074900.png",
+      "prompt": "Transparent pixel-art RAINY crop-growth atlas, matching reference style. Exactly four rows, thirteen frames per row progressing left to right from planted seed through twelve five-minute stages to maturity. Row1 rice: shoots to golden grain. Row2 okra: seedling to leafy plant with upright green pods. Row3 eggplant: seedling to purple-flowered bush bearing purple eggplants. Row4 bottle gourd: tiny vine growing over a fixed wooden trellis to hanging pale green gourds. Keep trellis constant from beginning, foliage grows. All frames same scale, bottom-center aligned within rows, generous empty gutters, never touching. High angled overhead camera showing fronts, rich green pixel clusters and dark outlines matching attached strawberry. Wide canvas. No labels, numbers, grid, backdrop, ground, gradients or glow. Actual transparent alpha outside sprites. All four complete sequences fully inside canvas.",
+      "size": [
+        2115,
+        744
+      ],
+      "png_color_type": 6
+    },
+    {
+      "name": "autumn-growth",
+      "file": "exec-1399b9b6-9392-4689-9070-268a89cf292a.png",
+      "prompt": "Transparent pixel-art AUTUMN crop-growth atlas matching reference style, exactly 4 rows x 13 columns. Row1 pumpkin vine, row2 carrot, row3 sweet potato vine, row4 orange marigold. Each row is 13 growth frames: planted seed at zero, then twelve incremental five-minute stages ending with mature harvest. Leaves increase gradually; pumpkin fruit turns green to orange, carrot root shoulder becomes orange, sweet potato tuber shoulder grows beneath vine, marigold buds open orange. Constant bottom-center root position and scale per row, ample transparent gutters between every frame. Cozy detailed crisp pixel clusters, organic dark outlines, high angled overhead view showing fronts. No text, no grid, no background, no colored halo, no glow, no ground patches. Actual alpha transparency. Wide canvas with all sprites fully inside margins.",
+      "size": [
+        2022,
+        778
+      ],
+      "png_color_type": 6
+    },
+    {
+      "name": "winter-growth",
+      "file": "exec-3e019795-b5b7-40ea-9dae-da2a9184b073.png",
+      "prompt": "Transparent pixel-art WINTER crop-growth source atlas. Exactly four rows of thirteen isolated growth frames each, wide canvas. Row1 cabbage, row2 cauliflower, row3 spinach, row4 wheat. Left to right: planted seed at 0 minutes followed by twelve five-minute growth stages, ending mature at 60. Cabbage forms tight light green head, cauliflower develops white curd surrounded by leaves, spinach grows dark leafy rosette, wheat grows from green blades to ripe golden grain. Preserve same bottom-center root baseline per row and same scale. Generous transparent space between frames, all inside margins. Match attached reference's rich detailed pixel clusters, dark outlines, angled high overhead view with visible fronts. No snow on crops, no text, no lines, no background, gradients or glow. Actual transparent alpha.",
+      "size": [
+        2073,
+        758
+      ],
+      "png_color_type": 6
+    },
+    {
+      "name": "farmer-options",
+      "file": "exec-d2a12fc5-38e3-4361-91e1-85e6720f9f51.png",
+      "prompt": "Create a transparent pixel-art farmer CUSTOMIZATION REFERENCE SHEET matching attached farmer identity and proportions exactly. 4 rows x 3 columns, twelve full-body standing front-view farmers, consistent stance and baseline, generous empty gutters. Row1 hair variants only: black, brown, golden blond; all medium brown skin, tomato red shirt, denim blue pants. Row2 skin variants only: light, deep brown, medium brown; all brown hair, red shirt, denim pants. Row3 shirt variants only: tomato red #C94F43, sunflower gold #D9A83F, sage green #71946A; all brown hair, medium brown skin, denim pants. Row4 pants variants only: denim blue #46627D, cocoa brown #765847, charcoal #49545B; all brown hair, medium brown skin, red shirt. Simple shirt and work pants, boots, no hat. Same high angled overhead camera and cozy crisp pixel art. No text, no grid, no shadows, no gradient or glow, genuine transparent background. This is a color-option source sheet for later layered animation preparation.",
+      "size": [
+        1086,
+        1448
+      ],
+      "png_color_type": 6
+    },
+    {
+      "name": "spring-production",
+      "file": "exec-9189a73d-7c5f-472c-86d4-966a3ddf8a8f.png",
+      "prompt": "Transparent pixel-art spring animal production sprite sheet for cozy farm game, matching supplied chicken reference exactly in style. Three rows of four isolated assets with generous transparent gutters. Row1 production props: single cream egg, three cream eggs in straw nest, empty straw nest, soft white Angora wool bundle tied with twine. Row2 same white chicken in four nest-laying poses: standing beside nest, settling into nest, sitting in nest, standing beside nest with visible egg; friendly non-graphic. Row3 same fluffy white Angora rabbit in four grooming poses: idle, grooming face, puffed fur, idle beside a small loose wool tuft. High angled overhead view showing fronts, warm dark outlines, crisp rich pixel clusters. Consistent animal identity and root baseline within each row. No text, grid, landscape, background gradient or glow. True alpha transparency outside all sprites.",
+      "size": [
+        1448,
+        1086
+      ],
+      "png_color_type": 6
+    }
+  ],
+  "tree_removal": {
+    "generator": "built-in image_gen",
+    "prompt": "Edit this sprite atlas: erase ONLY the three trees in the bottom row, replacing them with fully transparent pixels. Preserve canvas dimensions and all twelve crop/animal sprites in the upper three rows at EXACTLY their current pixel coordinates, size, color and shape. Do not crop, rearrange, enlarge, move, redraw or add any other object. Leave the bottom row empty transparent. Preserve existing transparency. Output is the same texture atlas without trees.",
+    "files": {
+      "summer": "exec-84b3196f-8255-4073-8d9b-c5c2ef7e753e.png",
+      "rainy": "exec-6db76975-abd7-4395-befc-c1a8ab4253d7.png",
+      "autumn": "exec-bd372597-9ff5-432e-aa2f-4915768a71c9.png",
+      "winter": "exec-978def15-9df0-4788-a74b-f45d9687255d.png"
+    }
+  },
+  "alpaca_replacement": {
+    "generator": "built-in image_gen",
+    "prompt": "Edit this transparent pixel-art farm atlas. Replace ONLY the four pink pigs in row 2 with four matching fluffy cream-colored alpacas: front idle, left-facing step, right-facing step, front blink. Small upright ears, slender long neck, rounded woolly body, four short legs and small tail. Cozy pixel clusters and outlines matching existing turkey art. Each alpaca must be fully contained within its existing pig cell: x110..345, x440..720, x805..1095, x1175..1425; all from y285 to y498, feet baseline y488. Maintain consistent animal scale across all poses, no oversized head. Preserve 1536x1024 canvas, all crop and turkey positions and artwork unchanged, empty bottom region unchanged. No trees, pigs, text or additional objects. Genuine alpha transparency outside sprites."
+  }
+}

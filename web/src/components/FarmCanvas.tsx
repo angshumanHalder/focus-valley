@@ -7,10 +7,12 @@ type Props = {
   farm: FarmState;
   active: Bed | null;
   autoplay?: boolean;
+  showcase?: boolean;
   running?: boolean;
+  activeAnimal?: string | null;
 };
 
-export function FarmCanvas({ farm, active, autoplay = false, running = false }: Props) {
+export function FarmCanvas({ farm, active, autoplay = false, running = false, showcase = false, activeAnimal = null }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<FarmScene>(null);
   const [availableWidth, setAvailableWidth] = useState(window.innerWidth);
@@ -50,6 +52,7 @@ export function FarmCanvas({ farm, active, autoplay = false, running = false }: 
       pixelArt: true,
       roundPixels: true,
       transparent: true,
+      input: { touch: { capture: false } },
       scene: farmScene,
     });
     return () => {
@@ -59,8 +62,8 @@ export function FarmCanvas({ farm, active, autoplay = false, running = false }: 
   }, []);
 
   useEffect(() => {
-    scene.current?.sync(farm, active, frame, reducedMotion, autoplay, running);
-  }, [farm, active?.areaId, active?.tileId, frame.columns, frame.rows, frame.zoom, frame.inset, frame.topInset, frame.width, frame.height, frame.sidePens, reducedMotion, autoplay, running]);
+    scene.current?.sync(farm, active, frame, reducedMotion, autoplay, running, showcase, activeAnimal);
+  }, [farm, active?.areaId, active?.tileId, frame.columns, frame.rows, frame.zoom, frame.inset, frame.topInset, frame.width, frame.height, frame.sidePens, reducedMotion, autoplay, running, showcase, activeAnimal]);
 
   return (
     <>

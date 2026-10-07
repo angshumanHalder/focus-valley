@@ -2,7 +2,7 @@ import { SubmitEvent, useEffect, useReducer, useRef, useState } from "react";
 import { initialTimer, timerReducer, type CompletedFocus } from "../reducers/timer";
 
 type FocusFormProps = {
-  target: { areaId: number; tileId: number } | null;
+  target: FocusTarget | null;
   onFocusComplete: (focus: CompletedFocus) => void;
   onFocusActiveChange: (active: boolean) => void;
   onFocusRunningChange: (running: boolean) => void;
@@ -49,7 +49,7 @@ export const FocusForm = ({ target, onFocusComplete, onFocusActiveChange, onFocu
     const time = Date.now();
     setNow(time);
     if (!target) return;
-    dispatch({ type: "startFocus", label, minutes, now: time, target });
+    dispatch({ type: "startFocus", id: crypto.randomUUID(), label, minutes, now: time, target });
   };
 
   const remainingMs =
@@ -103,11 +103,11 @@ export const FocusForm = ({ target, onFocusComplete, onFocusActiveChange, onFocu
                 <input
                   type="radio"
                   name="duration"
-                  value="1"
-                  checked={duration === "1"}
-                  onChange={() => setDuration("1")}
+                  value="15"
+                  checked={duration === "15"}
+                  onChange={() => setDuration("15")}
                 />{" "}
-                1 min
+                15 min
               </label>
               <label>
                 <input
@@ -148,7 +148,7 @@ export const FocusForm = ({ target, onFocusComplete, onFocusActiveChange, onFocu
               <input
                 id="custom-minutes"
                 type="number"
-                min="1"
+                min="15"
                 max="240"
                 required
                 value={customMinutes}

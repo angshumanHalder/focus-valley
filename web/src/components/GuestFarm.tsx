@@ -1,267 +1,104 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  activeBed,
-  assignFocusCredit,
-  completeFocus,
-  createFarm,
-  growthStage,
-  openFarmDay,
-  plantCrop,
-  previewFocus,
-  SEASON_CONTENT,
-} from "../game/farm.ts";
+import { activeBed, completeFocus, createFarm, openFarmDay, previewFocus, SEASON_CONTENT } from "../game/farm.ts";
+import { ANIMAL_PRODUCTS } from "../game/seasonalFrames.ts";
 import type { CompletedFocus } from "../reducers/timer";
 import { FarmCanvas } from "./FarmCanvas";
 import { FocusForm } from "./FocusForm";
-import { CROP_SHEETS, ANIMAL_SHEETS } from "../game/FarmScene";
+import { ItemSprite } from "./ItemSprite";
+import { Inventory } from "./Inventory";
+import { APPEARANCE_OPTIONS } from "../game/avatar";
 
-function ItemSprite({
-  item,
-  animal = false,
-}: {
-  item: string;
-  animal?: boolean;
-}) {
-  const sheets: Record<string, string> = animal ? ANIMAL_SHEETS : CROP_SHEETS;
-  const viewBox = animal
-    ? "100 55 430 580"
-    : item === "tulip"
-      ? "1390 500 256 320"
-      : "1410 500 256 320";
-  return sheets[item] ? (
-    <svg
-      className="item-sprite"
-      viewBox={viewBox}
-      aria-hidden="true"
-      focusable="false"
-    >
-      <image
-        href={sheets[item]}
-        width={animal ? 2172 : 1660}
-        height={animal ? 724 : 949}
-      />
-    </svg>
-  ) : (
-    <span className="item-sprite sprite-pending" aria-hidden="true">
-      ?
-    </span>
-  );
-}
+const AVATAR_GROUPS = [
+  { key: "hair", label: "Hair" },
+  { key: "skin", label: "Skin tone" },
+  { key: "shirt", label: "Shirt" },
+  { key: "pants", label: "Pants" },
+] as const;
 
-function rollDay(farm: FarmState, nowMs: number): FarmState {
-  return openFarmDay(farm, nowMs).farm;
-}
-
-export function GuestFarm({
-  onSeasonChange,
-  mode,
-}: {
-  onSeasonChange: (season: Season) => void;
-  mode: "guest" | "demo";
-}) {
-  const [farm, setFarm] = useState(() =>
-    createFarm(
-      Date.now(),
-      Intl.DateTimeFormat().resolvedOptions().timeZone,
-    ),
-  );
-  const [cropId, setCropId] = useState("strawberry");
-  const [inspectedAnimal, setInspectedAnimal] = useState<string | null>(null);
+export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: Season) => void; mode: "guest" | "demo" }) {
+  const [farm, setFarm] = useState(() => createFarm(Date.now(), Intl.DateTimeFormat().resolvedOptions().timeZone));
+  const [selection, setSelection] = useState<FocusTarget>({ kind: "crop", cropId: "strawberry" });
   const [focusActive, setFocusActive] = useState(false);
   const [focusRunning, setFocusRunning] = useState(false);
-  const [previewIntervals, setPreviewIntervals] = useState<RunningInterval[]>(
-    [],
-  );
+  const [previewIntervals, setPreviewIntervals] = useState<RunningInterval[]>([]);
   const [timerOpen, setTimerOpen] = useState(false);
-
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [error, setError] = useState("");
   useEffect(() => {
     if (focusActive) return;
-    const refresh = () => {
-      const nowMs = Date.now();
-      setFarm((current) => rollDay(current, nowMs));
-    };
+    const refresh = () => setFarm(current => openFarmDay(current, Date.now()));
     const interval = window.setInterval(refresh, 60_000);
     window.addEventListener("visibilitychange", refresh);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("visibilitychange", refresh);
-    };
+    return () => { window.clearInterval(interval); window.removeEventListener("visibilitychange", refresh); };
   }, [focusActive]);
-
-  const crops = SEASON_CONTENT[farm.progress.season].crops;
-  const animals = SEASON_CONTENT[farm.progress.season].animals;
-  const chosenCrop = crops.includes(cropId) ? cropId : crops[0];
-  const currentBed = activeBed(farm);
-  const currentTile = farm.farmDay.tiles.find(
-    (tile) =>
-      tile.areaId === currentBed?.areaId && tile.tileId === currentBed?.tileId,
-  );
-  const target = currentTile ? currentBed : null;
-  const displayFarm = useMemo(
-    () => previewFocus(farm, target, previewIntervals),
-    [farm, target?.areaId, target?.tileId, previewIntervals],
-  );
-  const displayTile = displayFarm.farmDay.tiles.find(
-    (tile) => tile.areaId === target?.areaId && tile.tileId === target?.tileId,
-  );
-  useEffect(
-    () => onSeasonChange(farm.progress.season),
-    [farm.progress.season, onSeasonChange],
-  );
-
-  function plant() {
-    const nowMs = Date.now();
-    setFarm((current) => {
-      const rolled = rollDay(current, nowMs);
-      const bed = activeBed(rolled);
-      if (!bed) return rolled;
-      const available = SEASON_CONTENT[rolled.progress.season].crops;
-      const planted = plantCrop(
-        rolled,
-        bed.areaId,
-        bed.tileId,
-        available.includes(chosenCrop) ? chosenCrop : available[0],
-      );
-      return planted.farmDay.focusCreditSeconds > 0
-        ? assignFocusCredit(planted, bed.areaId, bed.tileId)
-        : planted;
-    });
-  }
+  const { crops, animals } = SEASON_CONTENT[farm.progress.season];
+  const selectedIsAvailable = selection.kind === "crop" ? crops.includes(selection.cropId) : animals.includes(selection.animalId);
+  const target: FocusTarget = focusActive || selectedIsAvailable ? selection : { kind: "crop", cropId: crops[0] };
+  const displayFarm = useMemo(() => previewFocus(farm, target, previewIntervals), [farm, target.kind, target.kind === "crop" ? target.cropId : target.animalId, previewIntervals]);
+  const bed = activeBed(farm), displayBed = activeBed(displayFarm);
+  const tile = farm.farmDay.tiles.find(t => t.areaId === bed.areaId && t.tileId === bed.tileId && !t.harvested);
+  const displayTile = displayFarm.farmDay.tiles.find(t => t.areaId === displayBed.areaId && t.tileId === displayBed.tileId && !t.harvested);
+  const progress = target.kind === "animal" ? displayFarm.pens[target.animalId]?.focusSeconds ?? 0 : displayTile?.focusSeconds ?? 0;
+  useEffect(() => onSeasonChange(farm.progress.season), [farm.progress.season, onSeasonChange]);
 
   function complete(focus: CompletedFocus) {
-    const target = focus.target;
-    if (!target) return;
-    setFarm((current) => {
-      const result = completeFocus(
-        current,
-        target.areaId,
-        target.tileId,
-        focus.intervals,
-      );
-      return result.farm;
-    });
+    try {
+      const next = completeFocus(farm, focus);
+      setFarm(next);
+      setPreviewIntervals([]);
+      setError("");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not collect this session. Keep this tab open."); }
   }
-
-  return (
-    <>
-      <FarmCanvas
-        farm={displayFarm}
-        active={currentBed}
-        running={focusRunning}
-      />
-      <aside className="game-hud" aria-label="Farm controls">
-        <button
-          type="button"
-          className="hud-toggle"
-          aria-expanded={timerOpen}
-          aria-controls="farm-tools"
-          onClick={() => setTimerOpen((open) => !open)}
-        >
-          {timerOpen
-            ? "Close"
-            : focusRunning
-              ? "Focus in progress"
-              : "Plant & focus"}
-        </button>
-        <div id="farm-tools" className="hud-content" hidden={!timerOpen}>
-          <p className="guest-status">
-            {mode === "demo" ? "Google sign-in demo" : "Guest farm"} ·{" "}
-            {farm.progress.season} · progress isn’t saved
-          </p>
-          <section aria-label="Planting controls" className="planting-controls">
-            <fieldset className="farm-item-section">
-              <legend>Crops</legend>
-              <div className="farm-item-row">
-                {crops.map((crop) => (
-                  <button
-                    key={crop}
-                    type="button"
-                    className="farm-item"
-                    aria-pressed={chosenCrop === crop}
-                    disabled={focusActive}
-                    onClick={() => setCropId(crop)}
-                  >
-                    <ItemSprite item={crop} />
-                    <span>{crop.replaceAll("-", " ")}</span>
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            <fieldset className="farm-item-section">
-              <legend>Animals</legend>
-              <div className="farm-item-row">
-                {animals.map((animal, index) => {
-                  const unlocked =
-                    farm.progress.unlockedAnimals.includes(animal);
-                  return (
-                    <button
-                      key={animal}
-                      type="button"
-                      className="farm-item"
-                      aria-pressed={inspectedAnimal === animal}
-                      aria-label={`${animal.replaceAll("-", " ")}${unlocked ? " · unlocked" : ` · unlocks after ${(index + 1) * 4} seasonal harvests`}`}
-                      onClick={() => setInspectedAnimal(animal)}
-                    >
-                      <ItemSprite item={animal} animal />
-                      <span>{animal.replaceAll("-", " ")}</span>
-                      {!unlocked && <small>Locked</small>}
-                    </button>
-                  );
-                })}
-              </div>
-              {inspectedAnimal && animals.includes(inspectedAnimal) && (
-                <p className="animal-detail" role="status">
-                  {farm.progress.unlockedAnimals.includes(inspectedAnimal)
-                    ? "Unlocked"
-                    : `Unlocks after ${(animals.indexOf(inspectedAnimal) + 1) * 4} seasonal harvests.`}
-                  {inspectedAnimal === "chicken"
-                    ? " Chickens produce eggs."
-                    : inspectedAnimal === "rabbit"
-                      ? " Angora rabbits provide wool through grooming."
-                      : ""}
-                </p>
-              )}
-            </fieldset>
-            {displayTile && (
-              <p>
-                {displayTile.cropId} · stage {growthStage(displayTile)}/12 ·{" "}
-                {Math.floor(displayTile.focusSeconds / 60)} / 60 focus min
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={plant}
-              disabled={focusActive || !currentBed || Boolean(currentTile)}
-            >
-              Plant {chosenCrop.replaceAll("-", " ")}
-              {currentBed &&
-                ` in Area ${currentBed.areaId + 1} · Bed ${currentBed.tileId + 1}`}
-            </button>
-            {!currentBed && (
-              <p>All available crop beds are harvested for today.</p>
-            )}
-            {farm.farmDay.focusCreditSeconds > 0 && (
-              <p>
-                New-day focus credit:{" "}
-                {Math.floor(farm.farmDay.focusCreditSeconds / 60)} minutes
-              </p>
-            )}
-          </section>
-          <FocusForm
-            target={target}
-            onFocusComplete={complete}
-            onFocusActiveChange={setFocusActive}
-            onFocusRunningChange={setFocusRunning}
-            onFocusPreview={setPreviewIntervals}
-            plantedSeconds={currentTile?.focusSeconds ?? 0}
-          />
-        </div>
-      </aside>
-      <p className="movement-hint" role="status">
-        {focusRunning
-          ? "Your farmer is tending the active bed."
-          : "Click the farm, then use arrow keys — or tap a path to walk."}
-      </p>
-    </>
-  );
+  return <>
+    <FarmCanvas farm={displayFarm} active={target.kind === "crop" ? displayBed : null} activeAnimal={target.kind === "animal" ? target.animalId : null} running={focusRunning} />
+    <aside className="game-hud" aria-label="Farm controls">
+      <div className="hud-buttons">
+        <button type="button" className="hud-toggle" onClick={() => setInventoryOpen(true)}>Inventory</button>
+        <button type="button" className="hud-toggle" aria-expanded={avatarOpen} aria-controls="avatar-tools" onClick={() => setAvatarOpen(open => !open)}>{avatarOpen ? "Close farmer" : "Farmer"}</button>
+        <button type="button" className="hud-toggle" aria-expanded={timerOpen} aria-controls="farm-tools" onClick={() => setTimerOpen(open => !open)}>{timerOpen ? "Close" : focusRunning ? "Focus in progress" : "Plant & focus"}</button>
+      </div>
+      <div id="avatar-tools" className="hud-content avatar-content" hidden={!avatarOpen}>
+        <h2>Customize farmer</h2>
+        <p>Changes update your farmer in the scene.</p>
+        {AVATAR_GROUPS.map(group => <fieldset className="avatar-group" key={group.key}>
+          <legend>{group.label}</legend>
+          <div className="avatar-options">
+            {APPEARANCE_OPTIONS[group.key].map(option => <button key={option.id} type="button" className="avatar-option"
+              aria-pressed={farm.avatar[group.key] === option.id} disabled={focusActive}
+              onClick={() => setFarm(current => ({ ...current, avatar: { ...current.avatar, [group.key]: option.id } as FarmerAppearance }))}>
+              <i aria-hidden="true" style={{ backgroundColor: option.color }} />
+              <span>{option.label}</span>
+            </button>)}
+          </div>
+        </fieldset>)}
+        {focusActive && <p className="avatar-note">Pause or finish your focus timer to change appearance.</p>}
+      </div>
+      <div id="farm-tools" className="hud-content" hidden={!timerOpen}>
+        <p className="guest-status">{mode === "demo" ? "Google sign-in demo" : "Guest farm"} · {farm.progress.season} · progress isn’t saved</p>
+        <section aria-label="Focus target" className="planting-controls">
+          <fieldset className="farm-item-section"><legend>Crops</legend><div className="farm-item-row">
+            {crops.map(crop => <button key={crop} type="button" className="farm-item" aria-pressed={target.kind === "crop" && target.cropId === crop} disabled={focusActive} onClick={() => setSelection({ kind: "crop", cropId: crop })}>
+              <ItemSprite item={crop} /><span>{crop.replaceAll("-", " ")}</span>
+            </button>)}
+          </div></fieldset>
+          <fieldset className="farm-item-section"><legend>Animals</legend><div className="farm-item-row">
+            {animals.map((animal, index) => {
+              const unlocked = farm.progress.unlockedAnimals.includes(animal);
+              return <button key={animal} type="button" className="farm-item" aria-pressed={target.kind === "animal" && target.animalId === animal} disabled={focusActive || !unlocked} onClick={() => setSelection({ kind: "animal", animalId: animal })}>
+                <ItemSprite item={animal} animal /><span>{animal.replaceAll("-", " ")}</span><small>{unlocked ? ANIMAL_PRODUCTS[animal] : `${(index + 1) * 4} harvests`}</small>
+              </button>;
+            })}
+          </div></fieldset>
+          <p>{target.kind === "crop" ? `Area ${displayBed.areaId + 1} · Bed ${displayBed.tileId + 1} · ${displayTile?.cropId ?? target.cropId}` : `${target.animalId.replaceAll("-", " ")} pen`} · {Math.floor(progress / 60)} / 15 growth min</p>
+          {target.kind === "crop" && tile && tile.cropId !== target.cropId && <p>Finish {tile.cropId} first; {target.cropId} will grow in the next bed.</p>}
+          <p>Harvests collect automatically. Each full 50 focus minutes in one completed task earns 10 bonus growth minutes.</p>
+        </section>
+        <FocusForm target={target} onFocusComplete={complete} onFocusActiveChange={setFocusActive} onFocusRunningChange={setFocusRunning} onFocusPreview={setPreviewIntervals} plantedSeconds={target.kind === "crop" ? tile?.focusSeconds ?? 0 : farm.pens[target.animalId]?.focusSeconds ?? 0} />
+        {error && <p role="alert">{error}</p>}
+      </div>
+    </aside>
+    {inventoryOpen && <Inventory farm={farm} onClose={() => setInventoryOpen(false)} />}
+    <p className="movement-hint" role="status">{focusRunning ? `Your farmer is tending ${target.kind === "animal" ? "the selected pen" : "the active bed"}.` : "Click the farm, then use arrow keys — or tap a path to walk."}</p>
+  </>;
 }

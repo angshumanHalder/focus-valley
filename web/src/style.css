@@ -5,7 +5,7 @@
 }
 
 body { margin: 0; min-height: 100vh; }
-.game-world { max-width: none; margin: 0; padding: 0; min-height: 100dvh; overflow: hidden; }
+.game-world { max-width: none; margin: 0; padding: 0; min-height: 100dvh; }
 .game-world .farm-canvas { width: 100%; margin: 0; }
 .season-backdrop { position: fixed; inset: 0; background-position: center; background-size: 768px; filter: blur(1px); pointer-events: none; }
 .season-backdrop::after { content: ""; position: absolute; inset: 0; background: #18342328; }
@@ -14,41 +14,11 @@ body { margin: 0; min-height: 100vh; }
 @media (prefers-reduced-motion: reduce) { .rain-overlay { animation: none; } }
 
 main { position: relative; max-width: 115rem; margin: 0 auto; padding: 0 1.25rem 2rem; }
-.season-summer, .season-winter { color: #243827; }
-.season-summer header, .season-winter header, .season-summer .farm-panel, .season-winter .farm-panel, .season-summer .farm-controls, .season-winter .farm-controls, .season-summer .farm-preview, .season-winter .farm-preview { text-shadow: 0 1px 2px #fff9e9; }
-.season-summer .eyebrow, .season-winter .eyebrow { color: #385842; }
-
-header { position: absolute; top: 2rem; left: 1.25rem; z-index: 2; text-shadow: 0 2px 4px #193620; }
 h1 { margin: .25rem 0; font-size: clamp(2.25rem, 7vw, 4rem); }
 h2 { margin-top: 0; }
 p { line-height: 1.5; }
-.eyebrow { color: #f9e2a6; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-
-.timer-panel { padding: 1.5rem; border: 1px solid #e4efcf66; border-radius: 1rem; background: #173321df; box-shadow: 0 1rem 2rem #10271970; }
-.timer-panel:not(.farm-panel) { color: #fff9e9; }
-.farm-panel { position: absolute; top: 16rem; left: 0; z-index: 2; padding: 0; border: 0; background: none; box-shadow: none; text-shadow: 0 2px 4px #193620; }
-.farm-controls { max-width: 60rem; text-shadow: 0 2px 4px #193620; }
-.timer-panel + .timer-panel { margin-top: 1rem; }
-.farm-layout { position: relative; }
-.farm-preview { position: absolute; top: 12rem; left: 1.25rem; z-index: 2; text-shadow: 0 2px 4px #193620; }
-.farm-preview a { color: inherit; }
-.farm-layout > .timer-panel:not(.farm-panel) { position: fixed; top: 2rem; right: max(1.25rem, calc((100vw - 1840px) / 2)); z-index: 3; box-sizing: border-box; width: 22rem; max-height: calc(100vh - 4rem); overflow: auto; margin: 0; }
-.timer-toggle { display: none; }
 .farm-canvas { min-height: 256px; width: 100vw; margin-left: calc(50% - 50vw); }
-.farm-canvas canvas { display: block; image-rendering: pixelated; }
-@media (max-width: 70rem) {
-  .farm-layout > .timer-panel:not(.farm-panel) { top: auto; right: 1rem; bottom: 1rem; width: min(22rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); padding: .75rem; }
-  .timer-toggle { display: block; width: 100%; padding: .5rem; border: 0; background: transparent; color: inherit; text-align: left; }
-  .timer-controls:not(.is-open) { display: none; }
-}
-.farm-controls select { display: block; width: 100%; max-width: 15rem; margin: .5rem 0 1rem; padding: .6rem; font: inherit; color: #243827; }
-.crop-area { margin: 1rem 0; }
-.beds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
-.bed-status { min-height: 4.5rem; padding: .75rem; border: 1px solid #b9d1a680; border-radius: .5rem; background: #fffdf61c; text-align: left; }
-.bed-status { color: #fff9e9; text-shadow: none; }
-.farm-controls .bed-status { background: #173321c9; }
-.bed-progress { display: block; margin-top: .25rem; font-weight: 400; }
-.beds progress { display: block; width: 100%; height: .65rem; margin-top: .4rem; accent-color: #316b45; }
+.farm-canvas canvas { display: block; image-rendering: pixelated; touch-action: pan-y; }
 form { display: grid; gap: 1rem; }
 label, legend { font-weight: 600; }
 input[type="text"], input[type="number"] { box-sizing: border-box; width: 100%; padding: .75rem; border: 1px solid #809582; border-radius: .5rem; font: inherit; }
@@ -109,3 +79,81 @@ button:disabled { opacity: .55; cursor: default; }
 @keyframes menu-arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 767px) { .game-hud { top: auto; bottom: 3.75rem; } .hud-content { max-height: 65dvh; } }
 @media (prefers-reduced-motion: reduce) { .title-menu, .game-hud { animation: none; } }
+
+.season-preview-controls { position: fixed; top: 1rem; left: 1rem; right: 1rem; z-index: 8; width: fit-content; max-width: calc(100% - 4rem); display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; padding: .75rem; background: #203722f0; border: 2px solid #ac9865; border-radius: 3px; }
+.season-preview-controls select { min-height: 44px; padding: .5rem; font: inherit; color: #243827; background: white; }
+.season-preview-controls span { font-size: .75rem; color: #d1debf; }
+
+.hud-buttons { display: flex; gap: .5rem; justify-content: flex-end; }
+.avatar-content h2 { margin: .1rem 0 .5rem; }
+.avatar-content > p { margin: 0 0 1rem; color: #d1debf; font-size: .8rem; }
+.avatar-group { margin: 0 0 .9rem; }
+.avatar-group legend { margin-bottom: .4rem; font-size: .8rem; }
+.avatar-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; }
+.avatar-option { display: flex; align-items: center; justify-content: flex-start; gap: .4rem; min-width: 0; min-height: 42px; padding: .35rem; color: #fff9e9; background: #31492f; border-color: #91a17b66; font-size: .72rem; }
+.avatar-option:hover { color: #243827; }
+.avatar-option[aria-pressed="true"] { box-shadow: inset 0 0 0 2px #e9c475; }
+.avatar-option i { flex: 0 0 16px; width: 16px; height: 16px; border: 1px solid #fff9e988; border-radius: 50%; }
+.avatar-note { color: #f1d48b !important; }
+.inventory-dialog { box-sizing: border-box; width: min(960px, calc(100vw - 2rem)); max-height: 90dvh; overflow: auto; padding: 1.5rem; color: #fff9e9; background: #203722; border: 2px solid #ac9865; border-radius: 4px; }
+.inventory-dialog::backdrop { background: #102719b8; }
+.inventory-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.inventory-heading h2, .inventory-heading h3 { margin: 0; }
+.inventory-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .75rem; }
+.inventory-items button { display: flex; flex-direction: column; align-items: center; gap: .3rem; }
+.inventory-dialog button[aria-pressed="true"] { outline: 3px solid #e9c475; outline-offset: 1px; }
+
+.inventory-dialog > section { margin-top: 1.75rem; }
+.inventory-dialog .inventory-activity { margin-top: 2.25rem; padding-top: 1.75rem; border-top: 1px solid #ac986555; }
+.inventory-heading { flex-wrap: wrap; }
+.inventory-dialog :focus-visible { outline-color: #f1d48b; }
+.activity-toolbar { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: 1.25rem; margin: 1.5rem 0; }
+.period-picker legend { font-size: .8rem; color: #d1debf; }
+.period-options { display: flex; padding: 4px; border: 1px solid #91a17b66; border-radius: 8px; background: #152b19; }
+.period-options label { position: relative; cursor: pointer; }
+.period-options input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.period-options span { display: grid; place-items: center; min-height: 44px; padding: 0 1rem; border-radius: 5px; color: #d1debf; }
+.period-options input:checked + span { background: #e7c58a; color: #302b1f; box-shadow: 0 2px 4px #0003; }
+.period-options input:focus-visible + span { outline: 3px solid #f1d48b; outline-offset: 2px; }
+.period-options label:hover span { color: #fff9e9; }
+.period-options label:hover input:checked + span { color: #302b1f; }
+.period-navigation { display: flex; align-items: center; gap: .75rem; }
+.period-navigation span { text-align: center; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.period-navigation button { flex-shrink: 0; width: 44px; height: 44px; padding: 0; color: #fff3cf; background: #344b30; border-color: #8b9b7266; font-size: 1.6rem; }
+.period-navigation button:hover { background: #46613b; }
+.activity-chart-panel { padding: 1.25rem; border: 1px solid #91a17b44; border-radius: 8px; background: #172e1c; }
+.activity-chart-panel h4 { margin: 0 0 .5rem; color: #d1debf; font-size: .85rem; font-weight: 500; }
+.activity-total { margin: 0; font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.activity-total span { font-size: .9rem; font-weight: 400; color: #d1debf; }
+.sample-toggle { display: flex; align-items: center; gap: .5rem; min-height: 44px; color: #f1d48b; font-size: .8rem; cursor: pointer; }
+.sample-toggle input { width: 18px; height: 18px; accent-color: #e7c58a; }
+.chart-caption { margin: .75rem 0; color: #bccdb2; font-size: .8rem; }
+.inventory-chart-scroll { overflow-x: auto; margin-top: 1.5rem; }
+.inventory-chart { display: block; width: 100%; min-width: 520px; }
+.chart-grid { stroke: #aac49a30; stroke-width: 1; }
+.chart-axis { fill: #bccdb2; font-size: 12px; }
+.chart-value { fill: #fff3cf; font-size: 12px; font-variant-numeric: tabular-nums; }
+.chart-bar { fill: #a2c97e; }
+@media (max-width: 600px) {
+  .inventory-dialog { padding: 1rem; }
+  .activity-toolbar { align-items: stretch; }
+  .period-picker, .period-navigation { width: 100%; }
+  .period-options label { flex: 1; }
+  .period-navigation { justify-content: space-between; }
+  .activity-chart-panel { padding: .85rem; }
+}
+@media (max-width: 767px) {
+  .season-preview-controls { top: 4rem; }
+}
+.effects-toggle { position: fixed; bottom: .75rem; left: .75rem; z-index: 8; box-sizing: border-box; height: 44px; min-height: 44px; padding: .5rem; font-size: .75rem; }
+@media (max-width: 767px) { .effects-toggle { top: .75rem; bottom: auto; } }
+.weather { position: fixed; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; }
+.weather-rainy { background: #20344b35; }
+.cloud-shadows { position: absolute; inset: -30%; background: radial-gradient(ellipse at 25% 40%, #15253840, transparent 45%), radial-gradient(ellipse at 80% 60%, #15253835, transparent 40%); animation: clouds 32s ease-in-out infinite alternate; }
+.weather i { position: absolute; top: -20px; animation: weather-fall linear infinite; }
+.weather-autumn i { background: #d99039; border-radius: 0 70% 0 70%; opacity: .7; }
+.weather-autumn i:nth-child(3n) { background: #b8562d; }
+.weather-winter i { background: #fff; border-radius: 50%; opacity: .75; }
+@keyframes clouds { to { transform: translateX(15%); } }
+@keyframes weather-fall { to { transform: translate(80px, calc(100dvh + 40px)) rotate(270deg); } }
+@media (prefers-reduced-motion: reduce) { .weather i { display: none; } .cloud-shadows { animation: none; } }

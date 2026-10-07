@@ -6,7 +6,7 @@ export type FarmPaths = Map<string, PathPoint>;
 const key = ({ x, y }: PathPoint) => `${x},${y}`;
 const offsets = { up: [0, -16], down: [0, 16], left: [-16, 0], right: [16, 0] } as const;
 
-export function farmPaths(count: number, frame: ReturnType<typeof frameAreas>, animals: readonly string[]): FarmPaths {
+export function farmPaths(count: number, frame: ReturnType<typeof frameAreas>, animals: readonly string[], penAnimals: readonly string[] = ["chicken", "rabbit"]): FarmPaths {
   const points: FarmPaths = new Map();
   const line = (x: number, y: number, toX: number, toY: number) => {
     const steps = Math.max(Math.abs(toX - x), Math.abs(toY - y)) / 16;
@@ -23,11 +23,20 @@ export function farmPaths(count: number, frame: ReturnType<typeof frameAreas>, a
     if (area % frame.columns < frame.columns - 1 && area + 1 < count) line(x + 192, y + 192, x + 608, y + 192);
     if (area + frame.columns < count) line(x + 192, y + 192, x + 192, y + 608);
   }
-  if (frame.sidePens) ["chicken", "rabbit"].forEach((animal, index) => {
-    const adjoiningArea = index * frame.columns + frame.columns - 1;
-    if (!animals.includes(animal) || adjoiningArea >= count) return;
+  if (frame.sidePens) penAnimals.forEach((animal, index) => {
+    if (!animals.includes(animal) || count < frame.columns) return;
     const { x, y } = penOrigin(index, 4, frame);
-    line(x - 224, y + 192, x + 96, y + 192);
+    line(x - 224, 192, x + 16, 192);
+    line(x + 16, 192, x + 16, y + 192);
+    line(x + 16, y + 192, x + 96, y + 192);
+  });
+  if (!frame.sidePens) penAnimals.forEach((animal, index) => {
+    if (!animals.includes(animal)) return;
+    const { x, y } = penOrigin(index, 4, frame);
+    line(-16, 192, 48, 192);
+    line(-16, 192, -16, y + 384);
+    line(-16, y + 384, x + 192, y + 384);
+    line(x + 192, y + 320, x + 192, y + 384);
   });
   return points;
 }

@@ -8,20 +8,22 @@ export type TimerState = {
   completedFocusDurationsMs: number[]
   runningSinceMs: number
   runningIntervals: { startMs: number; endMs: number }[]
-  target: { areaId: number; tileId: number } | null
+  target: FocusTarget | null
+  sessionId: string
   lastCompletedFocus: CompletedFocus | null
   notice: string
 }
 
 export type CompletedFocus = {
+  id: string
   label: string
   durationMs: number
   intervals: { startMs: number; endMs: number }[]
-  target: { areaId: number; tileId: number } | null
+  target: FocusTarget | null
 }
 
 export type TimerAction =
-  | { type: 'startFocus'; label: string; minutes: number; now: number; target?: { areaId: number; tileId: number } }
+  | { type: 'startFocus'; label: string; minutes: number; now: number; target?: FocusTarget; id?: string }
   | { type: 'tick'; now: number }
   | { type: 'pause'; now: number }
   | { type: 'resume'; now: number }
@@ -39,6 +41,7 @@ export const initialTimer: TimerState = {
   runningSinceMs: 0,
   runningIntervals: [],
   target: null,
+  sessionId: '',
   lastCompletedFocus: null,
   notice: '',
 }
@@ -46,9 +49,9 @@ export const initialTimer: TimerState = {
 export function timerReducer(state: TimerState, action: TimerAction): TimerState {
   if (action.type === 'startFocus' && state.status === 'idle') {
     const label = action.label.trim()
-    if (!label || !Number.isInteger(action.minutes) || action.minutes < 1 || action.minutes > 240) return state
+    if (!label || !Number.isInteger(action.minutes) || action.minutes < 15 || action.minutes > 240) return state
     const remainingMs = action.minutes * 60_000
-    return { ...state, status: 'running', kind: 'focus', label, focusDurationMs: remainingMs, remainingMs, deadline: action.now + remainingMs, runningSinceMs: action.now, runningIntervals: [], target: action.target ?? null, lastCompletedFocus: null, notice: '' }
+    return { ...state, status: 'running', kind: 'focus', sessionId: action.id ?? String(action.now), label, focusDurationMs: remainingMs, remainingMs, deadline: action.now + remainingMs, runningSinceMs: action.now, runningIntervals: [], target: action.target ?? null, lastCompletedFocus: null, notice: '' }
   }
 
   if (action.type === 'skipBreak' && state.kind === 'break' && state.status !== 'idle') {
@@ -72,6 +75,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
       }
       const completedFocusDurationsMs = [...state.completedFocusDurationsMs, state.focusDurationMs]
       const lastCompletedFocus: CompletedFocus = {
+        id: state.sessionId,
         label: state.label,
         durationMs: state.focusDurationMs,
         intervals: [...state.runningIntervals, { startMs: state.runningSinceMs, endMs: state.deadline }],
