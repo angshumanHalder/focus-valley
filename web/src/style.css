@@ -55,8 +55,10 @@ button.primary:hover { background: #245537; }
 .hud-toggle { display: block; margin-left: auto; color: #fff3cf; background: #3a4c30f0; border: 2px solid #ac9865; border-radius: 3px; box-shadow: 0 3px #20341f80; }
 .hud-toggle:hover { background: #516640; }
 .hud-content { box-sizing: border-box; width: 22rem; max-width: calc(100vw - 2rem); max-height: calc(100dvh - 6rem); overflow: auto; margin-top: .5rem; padding: 1.25rem; border: 2px solid #ac9865; border-radius: 3px; background: #203722f5; box-shadow: 0 8px 32px #10271970; }
-.hud-menu-item { position: relative; }
-.hud-menu-item .hud-content { position: absolute; top: calc(100% + .5rem); right: 0; z-index: 1; margin: 0; max-height: calc(100dvh - 7rem); }
+.hud-menu-item { position: relative; min-width: 0; }
+.hud-menu-item .hud-content { position: absolute; top: calc(100% + .5rem); left: auto; right: 0; bottom: auto; z-index: 1; margin: 0; color: #fff9e9; max-height: calc(100dvh - 7rem); }
+.mobile-panel-close { display: none; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .hud-content h2 { font-size: 1.2rem; margin: 1.25rem 0; }
 .guest-status { font-size: .75rem; color: #d1debf; margin-top: 0; }
 .planting-controls { padding-bottom: 1rem; border-bottom: 1px solid #a8b98b55; }
@@ -79,7 +81,14 @@ button.primary:hover { background: #245537; }
 button:disabled { opacity: .55; cursor: default; }
 .farm-canvas:focus-visible { outline: 2px solid #ffe1a1; outline-offset: -4px; }
 @keyframes menu-arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@media (max-width: 767px) { .game-hud { top: auto; bottom: 3.75rem; } .hud-content { max-height: 65dvh; } }
+@media (max-width: 767px) {
+  .game-hud { top: auto; right: 1rem; bottom: 3.75rem; left: 1rem; max-width: none; }
+  .hud-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+  .hud-buttons > .hud-toggle, .hud-menu-item > .hud-toggle { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; margin: 0; }
+  .hud-menu-item .hud-content { position: fixed; inset: auto; top: 50%; left: 50%; right: auto; bottom: auto; transform: translate(-50%, -50%); width: min(22rem, calc(100vw - 2rem)); max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); margin: 0; }
+  .hud-menu-item .hud-content::backdrop { background: #102719b8; }
+  .mobile-panel-close { display: block; min-height: 44px; margin: 0 0 .75rem auto; }
+}
 @media (prefers-reduced-motion: reduce) { .title-menu, .game-hud { animation: none; } }
 
 .season-preview-controls { position: fixed; top: 1rem; left: 1rem; right: 1rem; z-index: 8; width: fit-content; max-width: calc(100% - 4rem); display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; padding: .75rem; background: #203722f0; border: 2px solid #ac9865; border-radius: 3px; }
@@ -159,3 +168,13 @@ button:disabled { opacity: .55; cursor: default; }
 @keyframes clouds { to { transform: translateX(15%); } }
 @keyframes weather-fall { to { transform: translate(80px, calc(100dvh + 40px)) rotate(270deg); } }
 @media (prefers-reduced-motion: reduce) { .weather i { display: none; } .cloud-shadows { animation: none; } }
+
+@media (max-width: 767px) {
+  .game-hud { top: auto; right: 1rem; bottom: 3.75rem; left: 1rem; max-width: none; }
+  .hud-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+  .hud-buttons > .hud-toggle, .hud-menu-item { box-sizing: border-box; width: 100%; min-width: 0; margin: 0; }
+  .hud-menu-item > .hud-toggle { box-sizing: border-box; width: 100%; min-height: 44px; margin: 0; }
+  .hud-menu-item .hud-content { position: fixed; inset: auto; top: 50%; left: 50%; right: auto; bottom: auto; transform: translate(-50%, -50%); width: min(22rem, calc(100vw - 2rem)); max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); margin: 0; }
+  .hud-menu-item .hud-content::backdrop { background: #102719b8; }
+  .mobile-panel-close { display: block; min-height: 44px; margin: 0 0 .75rem auto; }
+}

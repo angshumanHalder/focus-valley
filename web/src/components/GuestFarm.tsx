@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { activeBed, completeFocus, createFarm, openFarmDay, previewFocus, SEASON_CONTENT } from "../game/farm.ts";
 import { ANIMAL_PRODUCTS } from "../game/seasonalFrames.ts";
 import type { CompletedFocus } from "../reducers/timer";
@@ -28,6 +28,17 @@ export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: S
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState("Loading saved farm…");
+  const avatarPanel = useRef<HTMLDialogElement>(null);
+  const focusPanel = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const mobile = window.matchMedia("(max-width: 767px)").matches;
+    const panels: [HTMLDialogElement | null, boolean][] = [[avatarPanel.current, avatarOpen], [focusPanel.current, timerOpen]];
+    panels.forEach(([panel, open]) => {
+      if (!panel) return;
+      if (open && !panel.open) mobile ? panel.showModal() : panel.show();
+      else if (!open && panel.open) panel.close();
+    });
+  }, [avatarOpen, timerOpen]);
   useEffect(() => {
     let cancelled = false;
     loadFarm().then(saved => {
@@ -77,8 +88,9 @@ export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: S
         <button type="button" className="hud-toggle" onClick={() => setInventoryOpen(true)}>Inventory</button>
         <div className="hud-menu-item">
           <button type="button" className="hud-toggle" aria-expanded={avatarOpen} aria-controls="avatar-tools" onClick={() => { setAvatarOpen(open => !open); setTimerOpen(false); }}>{avatarOpen ? "Close farmer" : "Farmer"}</button>
-          <div id="avatar-tools" className="hud-content avatar-content" hidden={!avatarOpen}>
-        <h2>Customize farmer</h2>
+          <dialog ref={avatarPanel} id="avatar-tools" className="hud-content avatar-content" aria-labelledby="avatar-title" onCancel={() => setAvatarOpen(false)} onClose={() => setAvatarOpen(false)}>
+        <button type="button" className="mobile-panel-close" onClick={() => setAvatarOpen(false)}>Close</button>
+        <h2 id="avatar-title">Customize farmer</h2>
         <p>Changes update your farmer in the scene.</p>
         {AVATAR_GROUPS.map(group => <fieldset className="avatar-group" key={group.key}>
           <legend>{group.label}</legend>
@@ -92,11 +104,13 @@ export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: S
           </div>
         </fieldset>)}
         {focusActive && <p className="avatar-note">Pause or finish your focus timer to change appearance.</p>}
-          </div>
+          </dialog>
         </div>
         <div className="hud-menu-item">
           <button type="button" className="hud-toggle" aria-expanded={timerOpen} aria-controls="farm-tools" onClick={() => { setTimerOpen(open => !open); setAvatarOpen(false); }}>{timerOpen ? "Close" : focusRunning ? "Focus in progress" : "Plant & focus"}</button>
-          <div id="farm-tools" className="hud-content" hidden={!timerOpen}>
+          <dialog ref={focusPanel} id="farm-tools" className="hud-content focus-content" aria-labelledby="focus-title" onCancel={() => setTimerOpen(false)} onClose={() => setTimerOpen(false)}>
+        <button type="button" className="mobile-panel-close" onClick={() => setTimerOpen(false)}>Close</button>
+        <h2 id="focus-title" className="visually-hidden">Focus and planting</h2>
         <p className="guest-status">{mode === "demo" ? "Google sign-in demo" : "Your farm"} · {farm.progress.season} · {saveStatus}</p>
         <section aria-label="Focus target" className="planting-controls">
           <fieldset className="farm-item-section" hidden={focusRunning}><legend>Crops</legend><div className="farm-item-row">
@@ -118,7 +132,7 @@ export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: S
         </section>
         <FocusForm target={target} onFocusComplete={complete} onFocusActiveChange={setFocusActive} onFocusRunningChange={setFocusRunning} onFocusPreview={setPreviewIntervals} plantedSeconds={target.kind === "crop" ? tile?.focusSeconds ?? 0 : farm.pens[target.animalId]?.focusSeconds ?? 0} />
         {error && <p role="alert">{error}</p>}
-          </div>
+          </dialog>
         </div>
       </div>
     </aside>
