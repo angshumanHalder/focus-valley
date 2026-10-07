@@ -5,9 +5,12 @@ type FocusFormProps = {
   target: { areaId: number; tileId: number } | null;
   onFocusComplete: (focus: CompletedFocus) => void;
   onFocusActiveChange: (active: boolean) => void;
+  onFocusRunningChange: (running: boolean) => void;
+  onFocusPreview: (intervals: RunningInterval[]) => void;
+  plantedSeconds: number;
 };
 
-export const FocusForm = ({ target, onFocusComplete, onFocusActiveChange }: FocusFormProps) => {
+export const FocusForm = ({ target, onFocusComplete, onFocusActiveChange, onFocusRunningChange, onFocusPreview, plantedSeconds }: FocusFormProps) => {
   const [timer, dispatch] = useReducer(timerReducer, initialTimer);
   const handledCompletions = useRef(0);
   const [now, setNow] = useState(Date.now);
@@ -36,6 +39,10 @@ export const FocusForm = ({ target, onFocusComplete, onFocusActiveChange }: Focu
     onFocusActiveChange(timer.kind === "focus" && timer.status !== "idle");
   }, [timer.kind, timer.status, onFocusActiveChange]);
 
+  useEffect(() => {
+    onFocusRunningChange(timer.kind === "focus" && timer.status === "running");
+  }, [timer.kind, timer.status, onFocusRunningChange]);
+
   const startFocus = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const minutes = Number(duration === "custom" ? customMinutes : duration);
@@ -51,6 +58,15 @@ export const FocusForm = ({ target, onFocusComplete, onFocusActiveChange }: Focu
       : timer.status === "paused"
         ? timer.remainingMs
         : 0;
+
+  const visualStage = Math.floor((plantedSeconds * 1000 + timer.focusDurationMs - remainingMs) / 300_000);
+  // Send a visual snapshot only when a growth stage or timer status changes.
+  useEffect(() => {
+    onFocusPreview(timer.kind !== "focus" || timer.status === "idle" ? [] : [
+      ...timer.runningIntervals,
+      ...(timer.status === "running" ? [{ startMs: timer.runningSinceMs, endMs: Math.min(Date.now(), timer.deadline) }] : []),
+    ]);
+  }, [visualStage, timer.kind, timer.status, timer.runningIntervals, timer.runningSinceMs, timer.deadline, onFocusPreview]);
 
   const seconds = Math.ceil(remainingMs / 1000);
   const clock = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;

@@ -6,15 +6,17 @@ import { frameAreas } from "../game/sceneLayout.ts";
 type Props = {
   farm: FarmState;
   active: Bed | null;
+  autoplay?: boolean;
+  running?: boolean;
 };
 
-export function FarmCanvas({ farm, active }: Props) {
+export function FarmCanvas({ farm, active, autoplay = false, running = false }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<FarmScene>(null);
-  const [availableWidth, setAvailableWidth] = useState(512);
-  const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
+  const [availableWidth, setAvailableWidth] = useState(window.innerWidth);
+  const [viewportSize, setViewportSize] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-  const frame = frameAreas(availableWidth, farm.progress.unlockedAreaCount, viewportWidth, farm.progress.unlockedAnimals.length);
+  const frame = frameAreas(availableWidth, 4, viewportSize.width, 2, viewportSize.height);
 
   useLayoutEffect(() => {
     if (!host.current) return;
@@ -24,7 +26,7 @@ export function FarmCanvas({ farm, active }: Props) {
   }, []);
 
   useEffect(() => {
-    const resized = () => setViewportWidth(window.innerWidth);
+    const resized = () => setViewportSize({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener("resize", resized);
     return () => window.removeEventListener("resize", resized);
   }, []);
@@ -57,12 +59,21 @@ export function FarmCanvas({ farm, active }: Props) {
   }, []);
 
   useEffect(() => {
-    scene.current?.sync(farm, active, frame, reducedMotion);
-  }, [farm, active?.areaId, active?.tileId, frame.columns, frame.rows, frame.zoom, reducedMotion]);
+    scene.current?.sync(farm, active, frame, reducedMotion, autoplay, running);
+  }, [farm, active?.areaId, active?.tileId, frame.columns, frame.rows, frame.zoom, frame.inset, frame.topInset, frame.width, frame.height, frame.sidePens, reducedMotion, autoplay, running]);
 
   return (
     <>
-      <div className="farm-canvas" ref={host} role="img" aria-label={`Farm scene showing ${farm.progress.unlockedAreaCount} crop areas and ${farm.progress.unlockedAnimals.length} animal pens`} />
+      <div className="farm-canvas" ref={host} tabIndex={autoplay ? -1 : 0} role="region" aria-label={`Farm. ${farm.progress.unlockedAreaCount} areas unlocked. ${running ? "Focus is running; movement is automatic." : "Arrow keys or click a path to move."}`}
+        onBlur={() => scene.current?.clearKeys()}
+        onKeyDown={event => {
+          const direction = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" } as const;
+          if (event.key in direction && !autoplay) {
+            event.preventDefault();
+            scene.current?.pressDirection(direction[event.key as keyof typeof direction]);
+          }
+        }}
+        onKeyUp={event => { if (event.key.startsWith("Arrow")) scene.current?.clearKeys(); }} />
     </>
   );
 }

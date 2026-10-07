@@ -110,6 +110,12 @@ export function activeBed(farm: FarmState): { areaId: number; tileId: number } |
   return null;
 }
 
+export function bedState(farm: FarmState, areaId: number, tileId: number): "active" | "completed" | "locked" {
+  if (farm.farmDay.tiles.some(tile => tile.areaId === areaId && tile.tileId === tileId && tile.harvested)) return "completed";
+  const active = activeBed(farm);
+  return active?.areaId === areaId && active.tileId === tileId ? "active" : "locked";
+}
+
 function checkTile(farm: FarmState, areaId: number, tileId: number): void {
   if (
     !Number.isInteger(areaId) ||
@@ -285,6 +291,18 @@ function splitInterval(
     start = end;
   }
   return pieces;
+}
+
+// Display running growth without harvesting, unlocking, or crediting a session.
+export function previewFocus(farm: FarmState, target: { areaId: number; tileId: number } | null, intervals: readonly RunningInterval[]): FarmState {
+  if (!target || intervals.length === 0) return farm;
+  const formatter = dateFormatter(farm.timeZone);
+  const seconds = intervals.flatMap(interval => splitInterval(interval, formatter))
+    .filter(piece => piece.date === farm.farmDay.date).reduce((sum, piece) => sum + piece.seconds, 0);
+  return { ...farm, farmDay: { ...farm.farmDay, tiles: farm.farmDay.tiles.map(tile =>
+    tile.areaId === target.areaId && tile.tileId === target.tileId && !tile.harvested
+      ? { ...tile, focusSeconds: Math.min(3599, tile.focusSeconds + seconds) } : tile,
+  ) } };
 }
 
 export function completeFocus(

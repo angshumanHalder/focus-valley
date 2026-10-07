@@ -1,7 +1,9 @@
 import Phaser from "phaser";
-import { growthStage } from "./farm.ts";
+import { bedState, growthStage } from "./farm.ts";
+import { advancePath, farmPaths, nearestPath, pathRoute, pathStep, type Direction, type FarmPaths, type PathPoint } from "./farmPaths.ts";
 import { farmerPosition } from "./farmWalk.ts";
-import { areaOrigin, frameAreas } from "./sceneLayout.ts";
+import { areaOrigin, frameAreas, penOrigin } from "./sceneLayout.ts";
+import { previewGrowth, previewProduce, previewFarmer } from "./scenePreview.ts";
 import farmerSheet from "../../../art/source/farmer-sample.png?url";
 import raisedBed from "../../../art/source/raised-bed-sample.png?url";
 import sandyPath from "../../../art/source/sandy-path-sample.png?url";
@@ -17,9 +19,9 @@ export type Bed = { areaId: number; tileId: number };
 export type FarmFrame = ReturnType<typeof frameAreas>;
 
 const BED_OFFSETS = [[44, 44], [216, 44], [44, 216], [216, 216]] as const;
-const PLANT_OFFSETS = Array.from({ length: 16 }, (_, index) => [20 + index % 4 * 28, 32 + Math.floor(index / 4) * 25] as const);
-const CROP_SHEETS = { strawberry, peas, radish, tulip };
-const ANIMAL_SHEETS = { chicken, rabbit };
+const PLANT_OFFSETS = Array.from({ length: 16 }, (_, index) => [20 + index % 4 * 28, 18 + Math.floor(index / 4) * 20] as const);
+export const CROP_SHEETS = { strawberry, peas, radish, tulip };
+export const ANIMAL_SHEETS = { chicken, rabbit };
 
 export class FarmScene extends Phaser.Scene {
   private ground?: Phaser.GameObjects.Graphics;
@@ -27,13 +29,23 @@ export class FarmScene extends Phaser.Scene {
   private farmerShadow?: Phaser.GameObjects.Graphics;
   private farmer?: Phaser.GameObjects.Image;
   private butterfly?: Phaser.GameObjects.Graphics;
+  private produce?: Phaser.GameObjects.Graphics;
+  private shade?: Phaser.GameObjects.Graphics;
+  private paths: FarmPaths = new Map();
+  private route: PathPoint[] = [];
+  private direction?: Direction;
+  private running = false;
+  private tending = false;
+  private cropImages: { image: Phaser.GameObjects.Image; tile: FarmTile; index: number }[] = [];
   private spriteImages: Phaser.GameObjects.Image[] = [];
-  private animalImages: { image: Phaser.GameObjects.Image; x: number; y: number }[] = [];
+  private animalImages: { image: Phaser.GameObjects.Image; x: number; y: number; unlocked: boolean }[] = [];
   private groundImages: Phaser.GameObjects.Image[] = [];
   private farm?: FarmState;
   private active?: Bed | null;
   private frame?: FarmFrame;
   private reducedMotion = false;
+  private autoplay = false;
+  private elapsed = 0;
   private walkStart = 0;
   private lastPlantFrame = -1;
   private lastFarmerFrame = "";
@@ -57,49 +69,91 @@ export class FarmScene extends Phaser.Scene {
       for (let column = 0; column < 5; column++)
         sheet.add(`${row}-${column}`, 0, 95 + column * 242, 30 + row * 257, 240, 245);
     for (const crop of Object.keys(CROP_SHEETS))
-      this.textures.get(`crop-${crop}`).add("mature", 0, 1382, 500, 276, 320);
+      this.textures.get(`crop-${crop}`).add("mature", 0, 1403, 500, 256, 320);
     for (const animal of Object.keys(ANIMAL_SHEETS))
       for (let frame = 0; frame < 4; frame++)
         this.textures.get(`animal-${animal}`).add(String(frame), 0, frame * 543, 0, 543, 724);
     this.ground = this.add.graphics().setDepth(0);
     this.plants = this.add.graphics().setDepth(3);
     this.farmerShadow = this.add.graphics().setDepth(4);
-    this.farmer = this.add.image(192, 192, "farmer-sheet", "0-0").setOrigin(0.5, 1).setDisplaySize(64, 64).setDepth(5);
+    // Keep the whole farmer above locked-area shading (depth 7).
+    this.farmer = this.add.image(192, 192, "farmer-sheet", "0-0").setOrigin(0.5, 1).setDisplaySize(64, 64).setDepth(8);
     this.butterfly = this.add.graphics().setDepth(6);
+    this.produce = this.add.graphics().setDepth(4);
+    this.shade = this.add.graphics().setDepth(7);
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (this.autoplay || this.running || !this.farmer) return;
+      this.game.canvas.parentElement?.focus({ preventScroll: true });
+      const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      const target = nearestPath(point, this.paths);
+      if (Math.hypot(point.x - target.x, point.y - target.y) > 20) return;
+      this.direction = undefined;
+      this.route = pathRoute(this.farmer, target, this.paths);
+    });
     this.renderFarm();
   }
 
-  sync(farm: FarmState, active: Bed | null, frame: FarmFrame, reducedMotion: boolean) {
-    if (this.active?.areaId !== active?.areaId || this.active?.tileId !== active?.tileId)
-      this.walkStart = this.time?.now ?? 0;
+  pressDirection(direction: Direction) {
+    if (!this.running && !this.autoplay) {
+      this.direction = direction;
+      // Finish the current short segment before turning at a path junction.
+      this.route = this.route.slice(0, 1);
+    }
+  }
+
+  clearKeys() { this.direction = undefined; }
+
+  sync(farm: FarmState, active: Bed | null, frame: FarmFrame, reducedMotion: boolean, autoplay = false, running = false) {
+    const reposition = this.frame?.columns !== frame.columns || this.farm?.farmDay.date !== farm.farmDay.date;
+    const changed = this.running !== running || this.active?.areaId !== active?.areaId || this.active?.tileId !== active?.tileId || reposition;
     this.farm = farm;
     this.active = active;
     this.frame = frame;
     this.reducedMotion = reducedMotion;
+    this.autoplay = autoplay;
+    this.running = running;
+    const availableAreas = active ? active.areaId + 1 : farm.progress.unlockedAreaCount;
+    this.paths = farmPaths(availableAreas, frame, farm.progress.unlockedAnimals);
+    if (reposition && this.farmer) {
+      const origin = areaOrigin(active?.areaId ?? 0, frame.columns);
+      this.farmer.setPosition(origin.x + 192, origin.y + 192);
+    }
+    if (changed) {
+      this.direction = undefined;
+      this.tending = false;
+      this.route = [];
+      if (running && active && this.farmer) {
+        const origin = areaOrigin(active.areaId, frame.columns);
+        this.route = pathRoute(this.farmer, { x: origin.x + 192, y: origin.y + 192 }, this.paths);
+      }
+    }
     if (this.ground) this.renderFarm();
   }
 
   private renderFarm() {
     if (!this.ground || !this.plants || !this.farmer || !this.farm || !this.frame) return;
-    const { columns, zoom, width, height } = this.frame;
+    const { columns, zoom, inset, topInset, width, height } = this.frame;
     this.scale.resize(width, height);
     const camera = this.cameras.main;
     camera.setZoom(zoom);
-    camera.setBounds(0, 0, width / zoom, height / zoom);
-    camera.setScroll(0, 0);
+    camera.removeBounds();
+    camera.setScroll((width * (1 - zoom) / 2 - inset) / zoom, (height * (1 - zoom) / 2 - topInset) / zoom);
     this.ground.clear();
+    this.shade?.clear();
     this.spriteImages.forEach(image => image.destroy());
     this.spriteImages = [];
+    this.cropImages = [];
     this.animalImages = [];
     this.groundImages.forEach(image => image.destroy());
     this.groundImages = [];
 
-    for (let areaId = 0; areaId < this.farm.progress.unlockedAreaCount; areaId++) {
+    for (let areaId = 0; areaId < 4; areaId++) {
       const { x, y } = areaOrigin(areaId, columns);
       const leftGate = areaId % columns > 0;
-      const rightGate = areaId % columns + 1 < columns && areaId + 1 < this.farm.progress.unlockedAreaCount;
-      const topGate = areaId >= columns;
-      const bottomGate = areaId + columns < this.farm.progress.unlockedAreaCount;
+      const rightGate = areaId % columns + 1 < columns && areaId + 1 < 4
+        || this.frame.sidePens && areaId % columns === columns - 1;
+      const topGate = areaId >= columns || areaId === 0;
+      const bottomGate = areaId + columns < 4 || areaId % columns === 0;
       this.groundImages.push(this.add.image(x + 32, y + 32, "sandy-path").setOrigin(0).setDisplaySize(320, 320).setTint(0xb9a17d).setDepth(-2));
       this.groundImages.push(this.add.image(x + 176, y + 32, "sandy-path").setOrigin(0).setDisplaySize(32, 320).setDepth(-1));
       this.groundImages.push(this.add.image(x + 32, y + 176, "sandy-path").setOrigin(0).setDisplaySize(320, 32).setDepth(-1));
@@ -114,30 +168,90 @@ export class FarmScene extends Phaser.Scene {
         const by = y + offsetY;
         const tile = this.farm!.farmDay.tiles.find(entry => entry.areaId === areaId && entry.tileId === tileId);
         this.spriteImages.push(this.add.image(bx, by, "raised-bed").setOrigin(0).setDisplaySize(124, 124).setDepth(1));
-        if (tile && !tile.harvested && growthStage(tile) >= 11 && this.textures.exists(`crop-${tile.cropId}`))
-          for (const [plantX, plantY] of PLANT_OFFSETS)
-            this.spriteImages.push(this.add.image(bx + plantX, by + plantY, `crop-${tile.cropId}`, "mature").setOrigin(0.5, 1).setDisplaySize(26, 26).setDepth(3));
+        if (tile && this.textures.exists(`crop-${tile.cropId}`))
+          for (const [plantX, plantY] of PLANT_OFFSETS) {
+            const image = this.add.image(bx + plantX, by + plantY, `crop-${tile.cropId}`, "mature").setOrigin(0.5, 1).setDisplaySize(26, 26).setDepth(3);
+            this.spriteImages.push(image);
+            this.cropImages.push({ image, tile, index: areaId * 4 + tileId });
+          }
       });
+      if (!this.autoplay) {
+        const lockedBeds = BED_OFFSETS.map((_, tileId) => bedState(this.farm!, areaId, tileId) === "locked");
+        if (lockedBeds.every(Boolean)) this.shade?.fillStyle(0x17251e, .66).fillRect(x + 22, y + 22, 342, 342);
+        else BED_OFFSETS.forEach(([bx, by], tileId) => {
+          if (lockedBeds[tileId]) this.shade?.fillStyle(0x17251e, .62).fillRect(x + bx, y + by, 124, 124);
+        });
+      }
     }
 
-    this.farm.progress.unlockedAnimals.filter(animal => this.textures.exists(`animal-${animal}`)).forEach((animal, index) => {
-      const origin = areaOrigin(this.farm!.progress.unlockedAreaCount + index, columns);
+    Object.keys(ANIMAL_SHEETS).forEach((animal, index) => {
+      const unlocked = this.autoplay || this.farm!.progress.unlockedAnimals.includes(animal);
+      const origin = penOrigin(index, 4, this.frame!);
       this.groundImages.push(this.add.image(origin.x + 32, origin.y + 32, "meadow-ground").setOrigin(0).setDisplaySize(320, 320).setTint(0xa7b996).setDepth(-2));
-      this.drawFence(origin.x, origin.y, false, false, false, false);
+      this.drawFence(origin.x, origin.y, this.frame!.sidePens, false, false, false);
+      if (this.frame!.sidePens)
+        this.groundImages.push(this.add.image(origin.x + 32, origin.y + 176, "sandy-path").setOrigin(0).setDisplaySize(64, 32).setDepth(-1));
+      this.drawShelter(origin.x, origin.y, animal === "chicken");
       for (const [animalX, animalY] of [[112, 216], [192, 264], [272, 204]]) {
         const x = origin.x + animalX;
         const y = origin.y + animalY;
         const image = this.add.image(x, y, `animal-${animal}`, "0").setOrigin(0.5, 1).setDisplaySize(56, 56).setDepth(5);
         this.spriteImages.push(image);
-        this.animalImages.push({ image, x, y });
+        this.animalImages.push({ image, x, y, unlocked });
       }
+      if (!unlocked) this.shade?.fillStyle(0x17251e, .66).fillRect(origin.x + 22, origin.y + 22, 342, 342);
     });
 
-    const origin = areaOrigin(this.active?.areaId ?? 0, columns);
-    this.farmer.setPosition(origin.x + 192, origin.y + 192);
+    // Footpaths continue beyond the gardens into the surrounding meadow.
+    const rows = Math.ceil(4 / columns);
+    this.groundImages.push(this.add.image(176, -128, "sandy-path").setOrigin(0).setDisplaySize(32, 160).setDepth(-1));
+    this.groundImages.push(this.add.image(176, rows * 416 - 68, "sandy-path").setOrigin(0).setDisplaySize(32, 200).setDepth(-1));
+    this.drawMeadow();
+
     this.lastPlantFrame = -1;
     this.renderPlants(0);
     this.showFarmerFrame("0-0");
+  }
+
+  private drawShelter(x: number, y: number, chicken: boolean) {
+    const g = this.ground!;
+    g.fillStyle(0x354b2d, .25).fillEllipse(x + 180, y + 144, 180, 36);
+    g.fillStyle(0x634533).fillRect(x + 103, y + 82, 144, 64);
+    g.fillStyle(0xcb9d62).fillRect(x + 108, y + 84, 134, 54);
+    for (let board = 0; board < 8; board++)
+      g.fillStyle(0xa5794c).fillRect(x + 110 + board * 17, y + 84, 2, 54);
+    g.fillStyle(0x46352b).fillRect(x + 162, y + 102, 28, 36);
+    g.fillStyle(chicken ? 0x784539 : 0x486064).fillRect(x + 94, y + 62, 162, 28);
+    for (let row = 0; row < 4; row++)
+      g.fillStyle(chicken ? 0xb56547 : 0x6e8d87).fillRect(x + 98 + row * 3, y + 61 + row * 6, 154 - row * 6, 3);
+    g.fillStyle(0xe5c889).fillRect(x + 157, y + 137, 38, 7);
+    // Hay, a water trough, and three nesting/grooming spots.
+    g.fillStyle(0xb29245).fillRoundedRect(x + 66, y + 96, 27, 40, 3);
+    g.fillStyle(0xe0c775).fillRect(x + 69, y + 100, 21, 3).fillRect(x + 69, y + 111, 21, 3);
+    g.fillStyle(0x72533c).fillRect(x + 277, y + 99, 38, 24);
+    g.fillStyle(0x78a9ad).fillRect(x + 281, y + 103, 30, 14);
+    g.fillStyle(0xb6d9c6).fillRect(x + 284, y + 104, 15, 2);
+    for (let i = 0; i < 3; i++) {
+      g.fillStyle(0x9b7a44).fillEllipse(x + 110 + i * 80, y + 305, 40, 18);
+      g.fillStyle(0xd2b66d).fillEllipse(x + 110 + i * 80, y + 302, 32, 12);
+    }
+  }
+
+  private drawMeadow() {
+    const g = this.ground!;
+    const worldWidth = (this.frame!.columns + Number(this.frame!.sidePens)) * 416 - 32;
+    const worldHeight = this.frame!.rows * 416 - 32;
+    // Deterministic scatter in the verges, leaving the beds and paths clear.
+    for (let i = 0; i < 110; i++) {
+      const x = ((i * 173 + 47) % (worldWidth + 160)) - 80;
+      const y = ((i * 277 + 29) % (worldHeight + 160)) - 80;
+      const localX = ((x % 416) + 416) % 416;
+      const localY = ((y % 416) + 416) % 416;
+      if (localX < 364 && localY < 364 || Math.abs(localX - 192) < 24 || Math.abs(localY - 192) < 24) continue;
+      g.fillStyle(0x496a3d, .5).fillEllipse(x + 2, y + 4, 13, 5);
+      g.fillStyle(i % 4 === 0 ? 0x99978a : 0x779348).fillRect(x - 3, y - 3, 9, 7);
+      g.fillStyle(i % 4 === 0 ? 0xb9b6a1 : 0xdacb7d).fillRect(x - 2, y - 4, 4, 3);
+    }
   }
 
   private drawFence(areaX: number, areaY: number, leftGate: boolean, rightGate: boolean, topGate: boolean, bottomGate: boolean) {
@@ -184,19 +298,62 @@ export class FarmScene extends Phaser.Scene {
   private renderPlants(sway: number) {
     if (!this.plants || !this.farm) return;
     this.plants.clear();
-    for (const tile of this.farm.farmDay.tiles) {
+    this.cropImages.forEach(({ image, tile, index }) => {
+      const state = this.autoplay ? previewGrowth(this.elapsed / 1000, index) : tile;
+      const stage = growthStage({ ...tile, ...state });
+      image.setVisible(!state.harvested && (this.autoplay ? stage > 0 : stage >= 11));
+      const size = this.autoplay ? 8 + stage * 1.7 : 26;
+      const animated = this.autoplay || this.running && bedState(this.farm!, tile.areaId, tile.tileId) === "active";
+      image.setDisplaySize(size, size).setAngle(this.reducedMotion || !animated ? 0 : sway * 2 - 1);
+      image.setTint(stage < 7 ? 0x9ca85a : 0xffffff);
+    });
+    for (const source of this.farm.farmDay.tiles) {
+      const tile = this.autoplay ? { ...source, ...previewGrowth(this.elapsed / 1000, source.areaId * 4 + source.tileId) } : source;
+      if (this.autoplay && growthStage(tile) > 0) continue;
       if (tile.harvested || growthStage(tile) >= 11 && this.textures.exists(`crop-${tile.cropId}`)) continue;
       const [offsetX, offsetY] = BED_OFFSETS[tile.tileId];
       const origin = areaOrigin(tile.areaId, this.frame!.columns);
       for (const [plantX, plantY] of PLANT_OFFSETS)
-        this.drawCrop(this.plants, origin.x + offsetX + plantX, origin.y + offsetY + plantY, tile, sway);
+        this.drawCrop(this.plants, origin.x + offsetX + plantX, origin.y + offsetY + plantY, tile, this.autoplay || this.running && bedState(this.farm, tile.areaId, tile.tileId) === "active" ? sway : 0);
+    }
+  }
+
+  private renderProduce() {
+    const g = this.produce!;
+    g.clear();
+    if (!this.autoplay || !this.farm || !this.frame) return;
+    this.farm.progress.unlockedAnimals.forEach((_, index) => {
+      const origin = penOrigin(index, this.farm!.progress.unlockedAreaCount, this.frame!);
+      const count = previewProduce(this.elapsed / 1000, index);
+      for (let i = 0; i < count; i++) {
+        const x = origin.x + 110 + i * 80;
+        const y = origin.y + 298;
+        g.fillStyle(0x765d3c, .3).fillEllipse(x + 2, y + 6, 22, 8);
+        if (index === 0) {
+          g.fillStyle(0xd7c7a4).fillEllipse(x + 1, y, 13, 17);
+          g.fillStyle(0xfff2cf).fillEllipse(x - 1, y - 2, 10, 13);
+          g.fillStyle(0xffffff).fillRect(x - 3, y - 6, 3, 4);
+        } else {
+          g.fillStyle(0xc4bdaa).fillRoundedRect(x - 12, y - 8, 24, 18, 5);
+          g.fillStyle(0xf0e9d7).fillCircle(x - 7, y - 6, 7).fillCircle(x + 6, y - 6, 8).fillCircle(x, y - 10, 7);
+          g.fillStyle(0xb09362).fillRect(x - 2, y - 14, 3, 24);
+        }
+      }
+    });
+    for (const tile of this.farm.farmDay.tiles) {
+      if (!previewGrowth(this.elapsed / 1000, tile.areaId * 4 + tile.tileId).harvested) continue;
+      const origin = areaOrigin(tile.areaId, this.frame.columns);
+      const x = origin.x + 180, y = origin.y + 180;
+      g.fillStyle(0x795033).fillRect(x, y, 24, 18);
+      g.fillStyle(0xc79b60).fillRect(x + 2, y + 4, 20, 3).fillRect(x + 2, y + 12, 20, 3);
+      g.fillStyle(tile.cropId === "peas" ? 0x8eae53 : 0xd86f61).fillCircle(x + 7, y + 1, 5).fillCircle(x + 16, y, 5);
     }
   }
 
   private drawCrop(graphics: Phaser.GameObjects.Graphics, x: number, y: number, tile: FarmTile, sway: number) {
     const stage = growthStage(tile);
     if (stage === 0) {
-      graphics.fillStyle(0x4f8a42).fillRect(x - 2, y - 3, 4, 3);
+      graphics.fillStyle(0x4f8a42).fillRect(x - 2, y + 7, 4, 3);
       return;
     }
     const height = 5 + stage * 2;
@@ -221,22 +378,39 @@ export class FarmScene extends Phaser.Scene {
     }
   }
 
-  update(time: number) {
+  update(time: number, delta: number) {
     if (!this.farmer || !this.frame) return;
-    const areaId = this.active?.areaId ?? 0;
-    const origin = areaOrigin(areaId, this.frame.columns);
-    const walk = this.reducedMotion || !this.active
-      ? { x: origin.x + 192, y: origin.y + 192, facing: "down" as const, walking: false }
-      : farmerPosition(time - this.walkStart, areaId, this.active.tileId, this.frame.columns);
+    this.elapsed += delta;
+    let walk = { x: this.farmer.x, y: this.farmer.y, facing: "down" as Direction, walking: false };
+    if (this.autoplay) {
+      if (!this.reducedMotion) walk = previewFarmer(this.elapsed, this.frame.columns);
+    } else {
+      if (!this.running && this.direction && this.route.length === 0) {
+        const nearest = nearestPath(this.farmer, this.paths);
+        if (Math.hypot(nearest.x - this.farmer.x, nearest.y - this.farmer.y) > .1) this.route = [nearest];
+        else {
+          const next = pathStep(nearest, this.direction, this.paths);
+          if (next) this.route = [next];
+        }
+      }
+      if (this.route.length) walk = advancePath(this.farmer, this.route, Math.min(delta, 50) * .09);
+      else if (this.running && this.active) {
+        if (!this.tending) { this.tending = true; this.walkStart = time; }
+        if (!this.reducedMotion) walk = farmerPosition(time - this.walkStart, this.active.areaId, this.active.tileId, this.frame.columns);
+      }
+    }
     this.farmer.setPosition(walk.x, walk.y);
     const row = { down: 0, left: 1, right: 2, up: 3 }[walk.facing];
-    this.showFarmerFrame(`${row}-${walk.walking ? 1 + Math.floor(time / 130) % 4 : 0}`);
+    this.showFarmerFrame(`${row}-${walk.walking && !this.reducedMotion ? 1 + Math.floor(time / 130) % 4 : 0}`);
     this.farmerShadow?.clear().fillStyle(0x4c603b, 0.4).fillEllipse(walk.x, walk.y + 1, 26, 6);
-    this.animalImages.forEach(({ image, x, y }, index) => {
-      image.setFrame(String(this.reducedMotion ? 0 : Math.floor(time / 350 + index) % 4)).setDisplaySize(56, 56);
-      image.setPosition(x + (this.reducedMotion ? 0 : Math.round(Math.sin(time / 600 + index) * 12)), y);
+    this.animalImages.forEach(({ image, x, y, unlocked }, index) => {
+      const still = this.reducedMotion || !unlocked;
+      image.setFrame(String(still ? 0 : Math.floor(time / 350 + index) % 4)).setDisplaySize(56, 56);
+      image.setPosition(x + (still ? 0 : Math.round(Math.sin(time / 2300 + index * 2) * 22)), y + (still ? 0 : Math.round(Math.sin(time / 3100 + index) * 18)));
+      image.setFlipX(!still && Math.cos(time / 2300 + index * 2) < 0);
     });
     if (this.butterfly && this.frame) {
+      this.butterfly.setVisible(this.autoplay);
       const flutter = this.reducedMotion ? 0 : time / 450;
       const bx = 338 + Math.round(Math.sin(flutter) * 5);
       const by = 176 + Math.round(Math.sin(flutter * 1.3) * 4);
@@ -247,6 +421,7 @@ export class FarmScene extends Phaser.Scene {
     const plantFrame = Math.floor(time / 350);
     if (plantFrame !== this.lastPlantFrame) {
       this.renderPlants(this.reducedMotion ? 0 : plantFrame % 2);
+      this.renderProduce();
       this.lastPlantFrame = plantFrame;
     }
   }
