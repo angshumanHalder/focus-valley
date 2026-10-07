@@ -55,6 +55,8 @@ button.primary:hover { background: #245537; }
 .hud-toggle { display: block; margin-left: auto; color: #fff3cf; background: #3a4c30f0; border: 2px solid #ac9865; border-radius: 3px; box-shadow: 0 3px #20341f80; }
 .hud-toggle:hover { background: #516640; }
 .hud-content { box-sizing: border-box; width: 22rem; max-width: calc(100vw - 2rem); max-height: calc(100dvh - 6rem); overflow: auto; margin-top: .5rem; padding: 1.25rem; border: 2px solid #ac9865; border-radius: 3px; background: #203722f5; box-shadow: 0 8px 32px #10271970; }
+.hud-menu-item { position: relative; }
+.hud-menu-item .hud-content { position: absolute; top: calc(100% + .5rem); right: 0; z-index: 1; margin: 0; max-height: calc(100dvh - 7rem); }
 .hud-content h2 { font-size: 1.2rem; margin: 1.25rem 0; }
 .guest-status { font-size: .75rem; color: #d1debf; margin-top: 0; }
 .planting-controls { padding-bottom: 1rem; border-bottom: 1px solid #a8b98b55; }

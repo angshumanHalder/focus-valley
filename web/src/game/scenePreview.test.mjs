@@ -51,7 +51,7 @@ test('season previews contain all four gardens and the matching animals', async 
     farm.progress.unlockedAnimals.length = 0;
     assert.equal(createPreviewFarm(season).progress.unlockedAnimals.length, 2);
     if (season === 'spring') continue;
-    const png = readFileSync(new URL(`../../../art/source/seasonal-batch-01/${season}-roster.png`, import.meta.url));
+    const png = readFileSync(new URL(`../../../art/source/seasons/${season}/roster-sheet.png`, import.meta.url));
     const frames = SEASONAL_FRAMES[season];
     assert.equal(frames.crops.length, 4);
     assert.deepEqual(frames.animals.map(row => row.length), [4, 4]);

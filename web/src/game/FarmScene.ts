@@ -4,14 +4,14 @@ import { advancePath, farmPaths, nearestPath, pathRoute, pathStep, type Directio
 import { farmerPosition } from "./farmWalk.ts";
 import { areaOrigin, frameAreas, penOrigin } from "./sceneLayout.ts";
 import { previewGrowth, previewProduce, previewFarmer } from "./scenePreview.ts";
-import farmerSheet from "../../../art/source/farmer-sample.png?url";
-import raisedBed from "../../../art/source/raised-bed-sample.png?url";
-import sandyPath from "../../../art/source/sandy-path-sample.png?url";
-import meadowGround from "../../../art/source/meadow-ground.png?url";
+import farmerSheet from "../../../art/source/characters/farmer/farmer-walk-sheet.png?url";
+import raisedBed from "../../../art/source/environment/props/raised-bed.png?url";
+import sandyPath from "../../../art/source/environment/ground/sandy-path.png?url";
+import meadowGround from "../../../art/source/environment/ground/meadow-ground.png?url";
 
 import { SEASONAL_FRAMES, animalPopulation, ANIMAL_PRODUCTS } from "./seasonalFrames.ts";
-import autumnGround from "../../../art/source/autumn-ground.png?url";
-import winterGround from "../../../art/source/winter-ground.png?url";
+import autumnGround from "../../../art/source/environment/ground/autumn-ground.png?url";
+import winterGround from "../../../art/source/environment/ground/winter-ground.png?url";
 
 import { ROSTERS, CROP_SHEETS, ANIMAL_SHEETS } from "./spriteAssets.ts";
 import { recolorFarmer } from "./avatar.ts";
@@ -40,7 +40,7 @@ export class FarmScene extends Phaser.Scene {
   private tending = false;
   private cropImages: { image: Phaser.GameObjects.Image; tile: FarmTile; index: number }[] = [];
   private spriteImages: Phaser.GameObjects.Image[] = [];
-  private animalImages: { image: Phaser.GameObjects.Image; x: number; y: number; unlocked: boolean; scaleX: number; scaleY: number }[] = [];
+  private animalImages: { image: Phaser.GameObjects.Image; sleepMark: Phaser.GameObjects.Text; animalId: string; x: number; y: number; unlocked: boolean; scaleX: number; scaleY: number }[] = [];
   private groundImages: Phaser.GameObjects.Image[] = [];
   private farm?: FarmState;
   private active?: Bed | null;
@@ -196,6 +196,7 @@ export class FarmScene extends Phaser.Scene {
     this.spriteImages.forEach(image => image.destroy());
     this.spriteImages = [];
     this.cropImages = [];
+    this.animalImages.forEach(({ sleepMark }) => sleepMark.destroy());
     this.animalImages = [];
     this.groundImages.forEach(image => image.destroy());
     this.groundImages = [];
@@ -234,6 +235,7 @@ export class FarmScene extends Phaser.Scene {
         else BED_OFFSETS.forEach(([bx, by], tileId) => {
           if (lockedBeds[tileId]) this.shade?.fillStyle(0x17251e, .62).fillRect(x + bx, y + by, BED_WIDTH, 124);
         });
+        if (areaId >= this.farm.progress.unlockedAreaCount) this.drawAreaLock(x + 192, y + 192);
       }
     }
 
@@ -262,10 +264,14 @@ export class FarmScene extends Phaser.Scene {
         const x = origin.x + animalX;
         const y = origin.y + animalY;
         const image = this.add.image(x, y, `animal-${animal}`, "0").setOrigin(0.5, 1).setScale(scaleX, scaleY).setDepth(5);
+        const sleepMark = this.add.text(x + 18, y - size * .9, "Zz", { fontFamily: "monospace", fontSize: "16px", color: "#fff1b8", stroke: "#3a3027", strokeThickness: 3 }).setOrigin(.5, .5).setDepth(6);
         this.spriteImages.push(image);
-        this.animalImages.push({ image, x, y, unlocked, scaleX, scaleY });
+        this.animalImages.push({ image, sleepMark, animalId: animal, x, y, unlocked, scaleX, scaleY });
       }
-      if (!unlocked) this.shade?.fillStyle(0x17251e, .66).fillRect(origin.x + 22, origin.y + 22, 342, 342);
+      if (!unlocked) {
+        this.shade?.fillStyle(0x17251e, .66).fillRect(origin.x + 22, origin.y + 22, 342, 342);
+        this.drawAreaLock(origin.x + 192, origin.y + 192);
+      }
     });
 
     // Footpaths continue beyond the gardens into the surrounding meadow.
@@ -310,6 +316,14 @@ export class FarmScene extends Phaser.Scene {
       g.fillStyle(0x9b7a44).fillEllipse(x + 72 + (i + .5) * 240 / count, y + 305, 40, 18);
       g.fillStyle(0xd2b66d).fillEllipse(x + 72 + (i + .5) * 240 / count, y + 302, 32, 12);
     }
+  }
+
+  private drawAreaLock(x: number, y: number) {
+    const g = this.shade!;
+    g.fillStyle(0x342d22, .8).fillRoundedRect(x - 24, y - 4, 48, 40, 4);
+    g.lineStyle(7, 0xf0d28c, 1).strokeCircle(x, y - 10, 13);
+    g.fillStyle(0xf0d28c).fillRoundedRect(x - 23, y - 4, 46, 37, 5);
+    g.fillStyle(0x705438).fillCircle(x, y + 12, 4).fillRect(x - 2, y + 14, 4, 9);
   }
 
   private drawMeadow() {
@@ -504,9 +518,13 @@ export class FarmScene extends Phaser.Scene {
     const row = { down: 0, left: 1, right: 2, up: 3 }[walk.facing];
     this.showFarmerFrame(`${row}-${walk.walking && !this.reducedMotion ? 1 + Math.floor(time / 130) % 4 : 0}`);
     this.farmerShadow?.clear().fillStyle(0x4c603b, 0.4).fillEllipse(walk.x, walk.y + 1, 26, 6);
-    this.animalImages.forEach(({ image, x, y, unlocked, scaleX, scaleY }, index) => {
-      const still = this.reducedMotion || !unlocked;
-      image.setFrame(String(still ? 0 : Math.floor(time / 350 + index) % 4));
+    this.animalImages.forEach(({ image, sleepMark, animalId, x, y, unlocked, scaleX, scaleY }, index) => {
+      const working = this.autoplay || this.running && this.activeAnimal === animalId;
+      const still = this.reducedMotion || !working;
+      const restingFrame = animalId in ANIMAL_SHEETS ? 2 : 3;
+      sleepMark.setVisible(unlocked && !working && !this.autoplay);
+      sleepMark.setPosition(x + 18, y - Math.max(32, image.displayHeight) * .9);
+      image.setFrame(String(still ? restingFrame : Math.floor(time / 350 + index) % 4));
       image.setScale(scaleX, scaleY);
       image.setPosition(x + (still ? 0 : Math.round(Math.sin(time / 2300 + index * 2) * 22)), y + (still ? 0 : Math.round(Math.sin(time / 3100 + index) * 18)));
       image.setFlipX(!still && Math.cos(time / 2300 + index * 2) < 0);

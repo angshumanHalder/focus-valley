@@ -7,6 +7,7 @@ import { FocusForm } from "./FocusForm";
 import { ItemSprite } from "./ItemSprite";
 import { Inventory } from "./Inventory";
 import { APPEARANCE_OPTIONS } from "../game/avatar";
+import { downloadFarm, loadFarm, saveFarm } from "../game/save";
 
 const AVATAR_GROUPS = [
   { key: "hair", label: "Hair" },
@@ -25,6 +26,24 @@ export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: S
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("Loading saved farm…");
+  useEffect(() => {
+    let cancelled = false;
+    loadFarm().then(saved => {
+      if (!cancelled) {
+        if (saved) setFarm(openFarmDay(saved, Date.now()));
+        setSaveStatus(saved ? "Farm loaded" : "New farm · saves automatically on this device");
+        setLoaded(true);
+      }
+    }).catch(() => { if (!cancelled) { setSaveStatus("Local save unavailable"); setLoaded(true); } });
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    if (!loaded) return;
+    const timeout = window.setTimeout(() => saveFarm(farm).then(() => setSaveStatus("Saved on this device")).catch(() => setSaveStatus("Could not save on this device")), 250);
+    return () => window.clearTimeout(timeout);
+  }, [farm, loaded]);
   useEffect(() => {
     if (focusActive) return;
     const refresh = () => setFarm(current => openFarmDay(current, Date.now()));
@@ -54,11 +73,11 @@ export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: S
     <FarmCanvas farm={displayFarm} active={target.kind === "crop" ? displayBed : null} activeAnimal={target.kind === "animal" ? target.animalId : null} running={focusRunning} />
     <aside className="game-hud" aria-label="Farm controls">
       <div className="hud-buttons">
+        <button type="button" className="hud-toggle" onClick={() => downloadFarm(farm)}>Download save</button>
         <button type="button" className="hud-toggle" onClick={() => setInventoryOpen(true)}>Inventory</button>
-        <button type="button" className="hud-toggle" aria-expanded={avatarOpen} aria-controls="avatar-tools" onClick={() => setAvatarOpen(open => !open)}>{avatarOpen ? "Close farmer" : "Farmer"}</button>
-        <button type="button" className="hud-toggle" aria-expanded={timerOpen} aria-controls="farm-tools" onClick={() => setTimerOpen(open => !open)}>{timerOpen ? "Close" : focusRunning ? "Focus in progress" : "Plant & focus"}</button>
-      </div>
-      <div id="avatar-tools" className="hud-content avatar-content" hidden={!avatarOpen}>
+        <div className="hud-menu-item">
+          <button type="button" className="hud-toggle" aria-expanded={avatarOpen} aria-controls="avatar-tools" onClick={() => { setAvatarOpen(open => !open); setTimerOpen(false); }}>{avatarOpen ? "Close farmer" : "Farmer"}</button>
+          <div id="avatar-tools" className="hud-content avatar-content" hidden={!avatarOpen}>
         <h2>Customize farmer</h2>
         <p>Changes update your farmer in the scene.</p>
         {AVATAR_GROUPS.map(group => <fieldset className="avatar-group" key={group.key}>
@@ -73,16 +92,19 @@ export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: S
           </div>
         </fieldset>)}
         {focusActive && <p className="avatar-note">Pause or finish your focus timer to change appearance.</p>}
-      </div>
-      <div id="farm-tools" className="hud-content" hidden={!timerOpen}>
-        <p className="guest-status">{mode === "demo" ? "Google sign-in demo" : "Guest farm"} · {farm.progress.season} · progress isn’t saved</p>
+          </div>
+        </div>
+        <div className="hud-menu-item">
+          <button type="button" className="hud-toggle" aria-expanded={timerOpen} aria-controls="farm-tools" onClick={() => { setTimerOpen(open => !open); setAvatarOpen(false); }}>{timerOpen ? "Close" : focusRunning ? "Focus in progress" : "Plant & focus"}</button>
+          <div id="farm-tools" className="hud-content" hidden={!timerOpen}>
+        <p className="guest-status">{mode === "demo" ? "Google sign-in demo" : "Your farm"} · {farm.progress.season} · {saveStatus}</p>
         <section aria-label="Focus target" className="planting-controls">
-          <fieldset className="farm-item-section"><legend>Crops</legend><div className="farm-item-row">
+          <fieldset className="farm-item-section" hidden={focusRunning}><legend>Crops</legend><div className="farm-item-row">
             {crops.map(crop => <button key={crop} type="button" className="farm-item" aria-pressed={target.kind === "crop" && target.cropId === crop} disabled={focusActive} onClick={() => setSelection({ kind: "crop", cropId: crop })}>
               <ItemSprite item={crop} /><span>{crop.replaceAll("-", " ")}</span>
             </button>)}
           </div></fieldset>
-          <fieldset className="farm-item-section"><legend>Animals</legend><div className="farm-item-row">
+          <fieldset className="farm-item-section" hidden={focusRunning}><legend>Animals</legend><div className="farm-item-row">
             {animals.map((animal, index) => {
               const unlocked = farm.progress.unlockedAnimals.includes(animal);
               return <button key={animal} type="button" className="farm-item" aria-pressed={target.kind === "animal" && target.animalId === animal} disabled={focusActive || !unlocked} onClick={() => setSelection({ kind: "animal", animalId: animal })}>
@@ -96,6 +118,8 @@ export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: S
         </section>
         <FocusForm target={target} onFocusComplete={complete} onFocusActiveChange={setFocusActive} onFocusRunningChange={setFocusRunning} onFocusPreview={setPreviewIntervals} plantedSeconds={target.kind === "crop" ? tile?.focusSeconds ?? 0 : farm.pens[target.animalId]?.focusSeconds ?? 0} />
         {error && <p role="alert">{error}</p>}
+          </div>
+        </div>
       </div>
     </aside>
     {inventoryOpen && <Inventory farm={farm} onClose={() => setInventoryOpen(false)} />}
