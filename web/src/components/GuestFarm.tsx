@@ -16,8 +16,9 @@ const AVATAR_GROUPS = [
   { key: "pants", label: "Pants" },
 ] as const;
 
-export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: Season) => void; mode: "guest" | "demo" }) {
+export function GuestFarm({ onSeasonChange }: { onSeasonChange: (season: Season) => void }) {
   const [farm, setFarm] = useState(() => createFarm(Date.now(), Intl.DateTimeFormat().resolvedOptions().timeZone));
+  const farmRef = useRef(farm);
   const [selection, setSelection] = useState<FocusTarget>({ kind: "crop", cropId: "strawberry" });
   const [focusActive, setFocusActive] = useState(false);
   const [focusRunning, setFocusRunning] = useState(false);
@@ -26,38 +27,47 @@ export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: S
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [error, setError] = useState("");
-  const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState("Loading saved farm…");
   const avatarPanel = useRef<HTMLDialogElement>(null);
   const focusPanel = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    const mobile = window.matchMedia("(max-width: 767px)").matches;
-    const panels: [HTMLDialogElement | null, boolean][] = [[avatarPanel.current, avatarOpen], [focusPanel.current, timerOpen]];
-    panels.forEach(([panel, open]) => {
-      if (!panel) return;
-      if (open && !panel.open) mobile ? panel.showModal() : panel.show();
-      else if (!open && panel.open) panel.close();
+    const viewport = window.matchMedia("(max-width: 767px)");
+    const syncPanels = () => [[avatarPanel.current, avatarOpen], [focusPanel.current, timerOpen]].forEach(([panel, open]) => {
+      if (!(panel instanceof HTMLDialogElement)) return;
+      if (!open) { if (panel.open) panel.close(); return; }
+      if (panel.open && panel.matches(":modal") !== viewport.matches) panel.close();
+      if (!panel.open) viewport.matches ? panel.showModal() : panel.show();
     });
+    syncPanels();
+    viewport.addEventListener("change", syncPanels);
+    return () => viewport.removeEventListener("change", syncPanels);
   }, [avatarOpen, timerOpen]);
   useEffect(() => {
     let cancelled = false;
-    loadFarm().then(saved => {
-      if (!cancelled) {
-        if (saved) setFarm(openFarmDay(saved, Date.now()));
-        setSaveStatus(saved ? "Farm loaded" : "New farm · saves automatically on this device");
-        setLoaded(true);
-      }
-    }).catch(() => { if (!cancelled) { setSaveStatus("Local save unavailable"); setLoaded(true); } });
+    loadFarm().then(async saved => {
+      if (cancelled) return;
+      const next = saved ? openFarmDay(saved, Date.now()) : farmRef.current;
+      farmRef.current = next;
+      setFarm(next);
+      await saveFarm(next);
+      if (!cancelled) setSaveStatus("Saved on this device");
+    }).catch(() => { if (!cancelled) setSaveStatus("Local save unavailable"); });
     return () => { cancelled = true; };
   }, []);
-  useEffect(() => {
-    if (!loaded) return;
-    const timeout = window.setTimeout(() => saveFarm(farm).then(() => setSaveStatus("Saved on this device")).catch(() => setSaveStatus("Could not save on this device")), 250);
-    return () => window.clearTimeout(timeout);
-  }, [farm, loaded]);
+  async function persistFarm(next: FarmState) {
+    farmRef.current = next;
+    setFarm(next);
+    setSaveStatus("Saving…");
+    try { await saveFarm(next); setSaveStatus("Saved on this device"); }
+    catch { setSaveStatus("Could not save on this device"); setError("Your latest farm change could not be saved. Keep this tab open and try again."); }
+  }
   useEffect(() => {
     if (focusActive) return;
-    const refresh = () => setFarm(current => openFarmDay(current, Date.now()));
+    const refresh = () => {
+      const current = farmRef.current;
+      const next = openFarmDay(current, Date.now());
+      if (next !== current) void persistFarm(next);
+    };
     const interval = window.setInterval(refresh, 60_000);
     window.addEventListener("visibilitychange", refresh);
     return () => { window.clearInterval(interval); window.removeEventListener("visibilitychange", refresh); };
@@ -72,13 +82,17 @@ export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: S
   const progress = target.kind === "animal" ? displayFarm.pens[target.animalId]?.focusSeconds ?? 0 : displayTile?.focusSeconds ?? 0;
   useEffect(() => onSeasonChange(farm.progress.season), [farm.progress.season, onSeasonChange]);
 
-  function complete(focus: CompletedFocus) {
+  async function complete(focus: CompletedFocus) {
     try {
-      const next = completeFocus(farm, focus);
-      setFarm(next);
+      const next = completeFocus(farmRef.current, focus);
       setPreviewIntervals([]);
       setError("");
+      await persistFarm(next);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not collect this session. Keep this tab open."); }
+  }
+  function updateAppearance(group: keyof FarmerAppearance, value: FarmerAppearance[keyof FarmerAppearance]) {
+    const current = farmRef.current;
+    void persistFarm({ ...current, avatar: { ...current.avatar, [group]: value } as FarmerAppearance });
   }
   return <>
     <FarmCanvas farm={displayFarm} active={target.kind === "crop" ? displayBed : null} activeAnimal={target.kind === "animal" ? target.animalId : null} running={focusRunning} />
@@ -88,7 +102,7 @@ export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: S
         <button type="button" className="hud-toggle" onClick={() => setInventoryOpen(true)}>Inventory</button>
         <div className="hud-menu-item">
           <button type="button" className="hud-toggle" aria-expanded={avatarOpen} aria-controls="avatar-tools" onClick={() => { setAvatarOpen(open => !open); setTimerOpen(false); }}>{avatarOpen ? "Close farmer" : "Farmer"}</button>
-          <dialog ref={avatarPanel} id="avatar-tools" className="hud-content avatar-content" aria-labelledby="avatar-title" onCancel={() => setAvatarOpen(false)} onClose={() => setAvatarOpen(false)}>
+          <dialog ref={avatarPanel} id="avatar-tools" className="hud-content avatar-content" aria-labelledby="avatar-title" onCancel={() => setAvatarOpen(false)}>
         <button type="button" className="mobile-panel-close" onClick={() => setAvatarOpen(false)}>Close</button>
         <h2 id="avatar-title">Customize farmer</h2>
         <p>Changes update your farmer in the scene.</p>
@@ -97,7 +111,7 @@ export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: S
           <div className="avatar-options">
             {APPEARANCE_OPTIONS[group.key].map(option => <button key={option.id} type="button" className="avatar-option"
               aria-pressed={farm.avatar[group.key] === option.id} disabled={focusActive}
-              onClick={() => setFarm(current => ({ ...current, avatar: { ...current.avatar, [group.key]: option.id } as FarmerAppearance }))}>
+              onClick={() => updateAppearance(group.key, option.id)}>
               <i aria-hidden="true" style={{ backgroundColor: option.color }} />
               <span>{option.label}</span>
             </button>)}
@@ -108,10 +122,10 @@ export function GuestFarm({ onSeasonChange, mode }: { onSeasonChange: (season: S
         </div>
         <div className="hud-menu-item">
           <button type="button" className="hud-toggle" aria-expanded={timerOpen} aria-controls="farm-tools" onClick={() => { setTimerOpen(open => !open); setAvatarOpen(false); }}>{timerOpen ? "Close" : focusRunning ? "Focus in progress" : "Plant & focus"}</button>
-          <dialog ref={focusPanel} id="farm-tools" className="hud-content focus-content" aria-labelledby="focus-title" onCancel={() => setTimerOpen(false)} onClose={() => setTimerOpen(false)}>
+          <dialog ref={focusPanel} id="farm-tools" className="hud-content focus-content" aria-labelledby="focus-title" onCancel={() => setTimerOpen(false)}>
         <button type="button" className="mobile-panel-close" onClick={() => setTimerOpen(false)}>Close</button>
         <h2 id="focus-title" className="visually-hidden">Focus and planting</h2>
-        <p className="guest-status">{mode === "demo" ? "Google sign-in demo" : "Your farm"} · {farm.progress.season} · {saveStatus}</p>
+        <p className="guest-status">Your farm · {farm.progress.season} · {saveStatus}</p>
         <section aria-label="Focus target" className="planting-controls">
           <fieldset className="farm-item-section" hidden={focusRunning}><legend>Crops</legend><div className="farm-item-row">
             {crops.map(crop => <button key={crop} type="button" className="farm-item" aria-pressed={target.kind === "crop" && target.cropId === crop} disabled={focusActive} onClick={() => setSelection({ kind: "crop", cropId: crop })}>

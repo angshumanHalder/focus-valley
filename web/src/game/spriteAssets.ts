@@ -8,6 +8,12 @@ import summerRoster from "../../../art/source/seasons/summer/roster-sheet.png?ur
 import rainyRoster from "../../../art/source/seasons/rainy/roster-sheet.png?url";
 import autumnRoster from "../../../art/source/seasons/autumn/roster-sheet.png?url";
 import winterRoster from "../../../art/source/seasons/winter/roster-sheet.png?url";
+import springGrowth from "../../../art/source/crops/spring/growth-sheet.png?url";
+import summerGrowth from "../../../art/source/crops/summer/growth-sheet.png?url";
+import rainyGrowth from "../../../art/source/crops/rainy/growth-sheet.png?url";
+import autumnGrowth from "../../../art/source/crops/autumn/growth-sheet.png?url";
+import winterGrowth from "../../../art/source/crops/winter/growth-sheet.png?url";
 export const CROP_SHEETS = { strawberry, peas, radish, tulip };
 export const ANIMAL_SHEETS = { chicken, rabbit };
 export const ROSTERS = { summer: summerRoster, rainy: rainyRoster, autumn: autumnRoster, winter: winterRoster };
+export const GROWTH_SHEETS = { spring: springGrowth, summer: summerGrowth, rainy: rainyGrowth, autumn: autumnGrowth, winter: winterGrowth };

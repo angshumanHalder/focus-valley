@@ -50,7 +50,7 @@ export function Inventory({ farm, onClose }: { farm: FarmState; onClose: () => v
   const quantity = itemId ? farm.inventory[itemId] ?? 0 : Object.values(farm.inventory).reduce((a, b) => a + b, 0);
   return <dialog ref={dialog} className="inventory-dialog" aria-labelledby="inventory-title" onCancel={onClose}>
     <div className="inventory-heading"><h2 id="inventory-title">Inventory</h2><button type="button" onClick={onClose} autoFocus>Close inventory</button></div>
-    <p>Guest collection · kept for this visit only</p>
+    <p>Saved on this device · download a backup to transfer it.</p>
     <nav className="choices" aria-label="Inventory seasons">{SEASONS.map(s => <button key={s} type="button" aria-pressed={s === season} onClick={() => { setSeason(s); setItemId(undefined); }}>{s}</button>)}</nav>
     {(["crop", "animal"] as const).map(kind => <section key={kind}><h3>{kind === "crop" ? "Crops" : "Animal products"}</h3><div className="inventory-items">
       {INVENTORY_ITEMS.filter(i => i.season === season && i.kind === kind).map(i => {

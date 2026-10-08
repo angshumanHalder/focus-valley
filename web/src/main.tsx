@@ -21,11 +21,12 @@ function App() {
   const [entry, setEntry] = useState<"guest" | "preview" | null>(null);
   const [playMenu, setPlayMenu] = useState(false);
   const [hasSave, setHasSave] = useState(false);
+  const [saveChecked, setSaveChecked] = useState(false);
   const [menuError, setMenuError] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
   const [effects, setEffects] = useState(true);
   const [season, setSeason] = useState<Season>("spring");
-  useEffect(() => { loadFarm().then(save => setHasSave(!!save)).catch(() => setHasSave(false)); }, []);
+  useEffect(() => { loadFarm().then(save => setHasSave(!!save)).catch(() => setHasSave(false)).finally(() => setSaveChecked(true)); }, []);
   function enter(mode: "guest") {
     const update = () => { window.scrollTo(0, 0); flushSync(() => setEntry(mode)); };
     if (document.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches)
@@ -45,9 +46,9 @@ function App() {
             <select id="preview-season" value={season} onChange={event => setSeason(event.target.value as Season)}>
               {SEASONS.map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}
             </select>
-            <span>Visual preview</span>
+            <span>Bed order: planted → 5 → 10 → 15 min</span>
           </nav>
-        </> : entry ? <GuestFarm onSeasonChange={setSeason} mode={entry} /> : <>
+        </> : entry ? <GuestFarm onSeasonChange={setSeason} /> : <>
           <div className="title-farm" aria-hidden="true" inert><FarmCanvas farm={farm} active={null} autoplay /></div>
           <section className="title-screen" aria-labelledby="game-title">
             <div className="title-menu">
@@ -57,9 +58,13 @@ function App() {
                 <button type="button" onClick={() => setPlayMenu(true)}>Play</button>
                 <button type="button" onClick={() => setEntry("preview")}>Preview seasons</button>
               </div> : <div className="title-actions">
-                <button type="button" className="guest-entry" onClick={async () => { await clearFarmSave(); setHasSave(false); enter("guest"); }}>New Game</button>
-                {hasSave && <button type="button" onClick={() => enter("guest")}>Continue Game</button>}
-                <button type="button" onClick={() => fileInput.current?.click()}>Load Save File</button>
+                <button type="button" className="guest-entry" disabled={!saveChecked} onClick={async () => {
+                  if (hasSave && !window.confirm("Starting a new game will replace your current farm. Continue?")) return;
+                  try { await clearFarmSave(); setHasSave(false); setMenuError(""); enter("guest"); }
+                  catch { setMenuError("Could not replace the saved farm on this device."); }
+                }}>New Game</button>
+                {hasSave && <button type="button" disabled={!saveChecked} onClick={() => enter("guest")}>Continue Game</button>}
+                <button type="button" disabled={!saveChecked} onClick={() => fileInput.current?.click()}>Load Save File</button>
                 <button type="button" onClick={() => { setPlayMenu(false); setMenuError(""); }}>Back</button>
               </div>}
               <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={async event => {
@@ -68,6 +73,7 @@ function App() {
                 if (!file) return;
                 try {
                   const farm = await readFarmFile(file);
+                  if (hasSave && !window.confirm("Loading this file will replace your current farm. Continue?")) return;
                   await saveFarm(farm);
                   setHasSave(true);
                   setMenuError("");

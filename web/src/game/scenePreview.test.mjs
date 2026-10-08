@@ -47,7 +47,19 @@ test('season previews contain all four gardens and the matching animals', async 
     assert.equal(farm.progress.unlockedAreaCount, 4);
     assert.equal(farm.farmDay.tiles.length, 16);
     assert.deepEqual(farm.progress.unlockedAnimals, SEASON_CONTENT[season].animals);
-    assert.ok(farm.farmDay.tiles.every(t => SEASON_CONTENT[season].crops.includes(t.cropId) && t.focusSeconds === 900 && !t.harvested));
+    for (let areaId = 0; areaId < 4; areaId++) {
+      const beds = farm.farmDay.tiles.filter(t => t.areaId === areaId);
+      assert.deepEqual(beds.map(t => t.focusSeconds), [0, 300, 600, 900]);
+      assert.ok(beds.every(t => t.cropId === SEASON_CONTENT[season].crops[areaId] && !t.harvested));
+    }
+    const { CROP_GROWTH_FRAMES } = await import('./cropGrowthFrames.ts');
+    const growth = readFileSync(new URL(`../../../art/source/crops/${season}/growth-sheet.png`, import.meta.url));
+    assert.equal(CROP_GROWTH_FRAMES[season].length, 4);
+    for (const stages of CROP_GROWTH_FRAMES[season]) {
+      assert.equal(stages.length, 4);
+      for (const [x, y, w, h] of stages)
+        assert.ok(x >= 0 && y >= 0 && w > 0 && h > 0 && x + w <= growth.readUInt32BE(16) && y + h <= growth.readUInt32BE(20));
+    }
     farm.progress.unlockedAnimals.length = 0;
     assert.equal(createPreviewFarm(season).progress.unlockedAnimals.length, 2);
     if (season === 'spring') continue;

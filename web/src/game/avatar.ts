@@ -2,7 +2,7 @@ export const APPEARANCE_OPTIONS = {
   hair: [
     { id: "black", label: "Black", color: "#211c1b" },
     { id: "brown", label: "Brown", color: "#563a2c" },
-    { id: "golden", label: "Golden", color: "#d8a447" },
+    { id: "golden", label: "Golden", color: "#ddbb80" },
   ],
   skin: [
     { id: "light", label: "Light", color: "#e5bd9b" },
@@ -46,13 +46,31 @@ export function recolorFarmer(context: CanvasRenderingContext2D, appearance: Far
   const { width, height } = context.canvas;
   const image = context.getImageData(0, 0, width, height);
   const data = image.data;
+  const hairMask = new Uint8Array(width * height);
+  // Hair and boots share browns. Limit the source-color mask to each atlas head.
+  for (let pixel = 0; pixel < hairMask.length; pixel++) {
+    const y = Math.floor(pixel / width) - 30;
+    if (y < 0 || y >= 4 * 257 || y % 257 >= 140 || data[pixel * 4 + 3] < 32) continue;
+    const [hue, saturation, light] = hsl(data[pixel * 4], data[pixel * 4 + 1], data[pixel * 4 + 2]);
+    hairMask[pixel] = Number(hue >= .02 && hue <= .09 && saturation > .16 && saturation < .46 && light < .3);
+  }
   for (let i = 0; i < data.length; i += 4) {
     if (data[i + 3] < 32) continue;
     let [hue, saturation, light] = hsl(data[i], data[i + 1], data[i + 2]);
+    const pixel = i / 4;
+    // Preserve thin eye/face lines and the hair outline, even when their colors match.
+    const hair = hairMask[pixel] && hairMask[pixel - 3] && hairMask[pixel + 3] &&
+      hairMask[pixel - width * 3] && hairMask[pixel + width * 3];
     let changed = true;
-    if (hue >= .015 && hue <= .12 && saturation > .2 && light < .3 && appearance.hair !== "brown") {
+    if (hair && appearance.hair !== "brown") {
+      if (light < .09) continue; // Preserve the dark silhouette and facial outlines.
       if (appearance.hair === "black") { hue = .04; saturation *= .25; light *= .48; }
-      else { hue = .115; saturation = Math.max(.35, saturation); light = clamp(light * 1.85); }
+      else {
+        const shade = clamp((light - .09) / .13);
+        // Warm brown shadows through pale blonde highlights, without a yellow tint.
+        [data[i], data[i + 1], data[i + 2]] = [90 + shade * 157, 57 + shade * 162, 38 + shade * 113];
+        continue;
+      }
     } else if (hue >= .035 && hue <= .13 && saturation > .2 && light >= .3 && appearance.skin !== "brown") {
       if (appearance.skin === "light") { saturation *= .58; light = clamp(light * 1.22); }
       else { saturation *= .88; light *= .68; }

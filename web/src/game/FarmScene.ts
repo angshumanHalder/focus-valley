@@ -13,7 +13,8 @@ import { SEASONAL_FRAMES, animalPopulation, ANIMAL_PRODUCTS } from "./seasonalFr
 import autumnGround from "../../../art/source/environment/ground/autumn-ground.png?url";
 import winterGround from "../../../art/source/environment/ground/winter-ground.png?url";
 
-import { ROSTERS, CROP_SHEETS, ANIMAL_SHEETS } from "./spriteAssets.ts";
+import { ROSTERS, CROP_SHEETS, ANIMAL_SHEETS, GROWTH_SHEETS } from "./spriteAssets.ts";
+import { CROP_GROWTH_FRAMES } from "./cropGrowthFrames.ts";
 import { recolorFarmer } from "./avatar.ts";
 
 export type Bed = { areaId: number; tileId: number };
@@ -22,7 +23,7 @@ export type FarmFrame = ReturnType<typeof frameAreas>;
 const BED_WIDTH = 144;
 const BED_OFFSETS = [[24, 44], [216, 44], [24, 216], [216, 216]] as const;
 // Fit 28px mature sprites inside the soil, excluding image padding and wooden rails.
-const PLANT_OFFSETS = Array.from({ length: 16 }, (_, index) => [34 + index % 4 * 25, 44 + Math.floor(index / 4) * 16] as const);
+const PLANT_OFFSETS = Array.from({ length: 16 }, (_, index) => [[38, 59, 84, 105][index % 4], 44 + Math.floor(index / 4) * 16] as const);
 
 export class FarmScene extends Phaser.Scene {
   private ground?: Phaser.GameObjects.Graphics;
@@ -40,6 +41,7 @@ export class FarmScene extends Phaser.Scene {
   private tending = false;
   private cropImages: { image: Phaser.GameObjects.Image; tile: FarmTile; index: number }[] = [];
   private spriteImages: Phaser.GameObjects.Image[] = [];
+  private previewLabels: Phaser.GameObjects.Text[] = [];
   private animalImages: { image: Phaser.GameObjects.Image; sleepMark: Phaser.GameObjects.Text; animalId: string; x: number; y: number; unlocked: boolean; scaleX: number; scaleY: number }[] = [];
   private groundImages: Phaser.GameObjects.Image[] = [];
   private farm?: FarmState;
@@ -67,6 +69,7 @@ export class FarmScene extends Phaser.Scene {
     this.load.image("winter-ground", winterGround);
     for (const [season, url] of Object.entries(ROSTERS)) this.load.image(`roster-${season}`, url);
     for (const [crop, url] of Object.entries(CROP_SHEETS)) this.load.image(`crop-${crop}`, url);
+    for (const [season, url] of Object.entries(GROWTH_SHEETS)) this.load.image(`growth-${season}`, url);
     for (const [animal, url] of Object.entries(ANIMAL_SHEETS)) this.load.image(`animal-${animal}`, url);
   }
 
@@ -77,6 +80,11 @@ export class FarmScene extends Phaser.Scene {
         sheet.add(`${row}-${column}`, 0, 95 + column * 242, 30 + row * 257, 240, 245);
     for (const crop of Object.keys(CROP_SHEETS))
       this.textures.get(`crop-${crop}`).add("mature", 0, 1403, 500, 256, 320);
+    for (const season of Object.keys(GROWTH_SHEETS) as Season[])
+      CROP_GROWTH_FRAMES[season].forEach((stages, cropIndex) => {
+        const crop = SEASON_CONTENT[season].crops[cropIndex];
+        stages.forEach((rect, stage) => this.textures.get(`growth-${season}`).add(`${crop}-${stage}`, 0, ...rect));
+      });
     for (const animal of Object.keys(ANIMAL_SHEETS))
       for (let frame = 0; frame < 4; frame++)
         this.textures.get(`animal-${animal}`).add(String(frame), 0, frame * 543, 0, 543, 724);
@@ -195,6 +203,8 @@ export class FarmScene extends Phaser.Scene {
     this.shade?.clear();
     this.spriteImages.forEach(image => image.destroy());
     this.spriteImages = [];
+    this.previewLabels.forEach(label => label.destroy());
+    this.previewLabels = [];
     this.cropImages = [];
     this.animalImages.forEach(({ sleepMark }) => sleepMark.destroy());
     this.animalImages = [];
@@ -216,6 +226,12 @@ export class FarmScene extends Phaser.Scene {
       if (bottomGate)
         this.groundImages.push(this.add.image(x + 176, y + 352, "sandy-path").setOrigin(0).setDisplaySize(32, 96).setDepth(-1));
       this.drawFence(x, y, leftGate, rightGate, topGate, bottomGate, 20);
+      if (this.showcase) {
+        const crop = SEASON_CONTENT[this.farm.progress.season].crops[areaId];
+        this.previewLabels.push(this.add.text(x + 192, y + 192, crop.replaceAll("-", " "), {
+          fontFamily: "monospace", fontSize: "12px", color: "#fff3cf", backgroundColor: "#203722", padding: { x: 4, y: 2 },
+        }).setOrigin(.5).setDepth(9));
+      }
 
       BED_OFFSETS.forEach(([offsetX, offsetY], tileId) => {
         const bx = x + offsetX;
@@ -224,10 +240,25 @@ export class FarmScene extends Phaser.Scene {
         this.spriteImages.push(this.add.image(bx, by, "raised-bed").setOrigin(0).setDisplaySize(BED_WIDTH, 124).setDepth(1));
         if (tile && this.textures.exists(`crop-${tile.cropId}`))
           for (const [plantX, plantY] of PLANT_OFFSETS) {
-            const image = this.add.image(bx + plantX, by + plantY, `crop-${tile.cropId}`, "mature").setOrigin(0.5, 1).setDisplaySize(26, 26).setDepth(3);
+            const texture = this.showcase ? `growth-${this.farm!.progress.season}` : `crop-${tile.cropId}`;
+            const stage = growthStage(tile);
+            const frame = this.showcase ? `${tile.cropId}-${stage}` : "mature";
+            let growthOffsetY = 0;
+            if (this.showcase) {
+              if (stage === 0) growthOffsetY = this.farm!.progress.season === "autumn" ? -8 : -10;
+              else if (stage === 1 && ["rice", "okra", "pumpkin", "carrot", "cabbage", "cauliflower"].includes(tile.cropId)) growthOffsetY = -5;
+            }
+            const growthOffsetX = this.showcase && stage === 1 && plantX === PLANT_OFFSETS[0][0] &&
+              ["spring", "summer"].includes(this.farm!.progress.season)
+              ? (["strawberry", "peas", "corn"].includes(tile.cropId) ? -2 : -1) : 0;
+            const image = this.add.image(bx + plantX + growthOffsetX, by + plantY + growthOffsetY, texture, frame).setOrigin(0.5, 1).setDisplaySize(26, 26).setDepth(3);
             this.spriteImages.push(image);
             this.cropImages.push({ image, tile, index: areaId * 4 + tileId });
           }
+        if (this.showcase)
+          this.previewLabels.push(this.add.text(bx + BED_WIDTH / 2, by + 111, ["Planted", "5 min", "10 min", "15 min"][tileId], {
+            fontFamily: "monospace", fontSize: "10px", color: "#fff3cf", backgroundColor: "#493423", padding: { x: 3, y: 1 },
+          }).setOrigin(.5, 0).setDepth(9));
       });
       if (!this.autoplay) {
         const lockedBeds = BED_OFFSETS.map((_, tileId) => bedState(this.farm!, areaId, tileId) === "locked");
@@ -393,6 +424,12 @@ export class FarmScene extends Phaser.Scene {
     if (!this.plants || !this.farm) return;
     this.plants.clear();
     this.cropImages.forEach(({ image, tile, index }) => {
+      if (this.showcase) {
+        const cropIndex = SEASON_CONTENT[this.farm!.progress.season].crops.indexOf(tile.cropId);
+        const mature = CROP_GROWTH_FRAMES[this.farm!.progress.season][cropIndex][3];
+        image.setVisible(true).setScale(26 / Math.max(mature[2], mature[3])).setAngle(0).clearTint();
+        return;
+      }
       const state = this.autoplay && !this.showcase ? previewGrowth(this.elapsed / 1000, index) : tile;
       const stage = growthStage({ ...tile, ...state });
       image.setVisible(this.autoplay && !this.showcase ? !state.harvested && stage > 0 : stage >= 3);
@@ -403,6 +440,7 @@ export class FarmScene extends Phaser.Scene {
       image.setAngle(this.reducedMotion || !animated ? 0 : sway * 2 - 1);
       image.setTint(stage < 2 ? 0x9ca85a : 0xffffff);
     });
+    if (this.showcase) return;
     for (const source of this.farm.farmDay.tiles) {
       const tile = this.autoplay && !this.showcase ? { ...source, ...previewGrowth(this.elapsed / 1000, source.areaId * 4 + source.tileId) } : source;
       if (this.autoplay && growthStage(tile) > 0) continue;

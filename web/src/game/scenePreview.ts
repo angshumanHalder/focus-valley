@@ -33,7 +33,7 @@ export function createPreviewFarm(season: Season): FarmState {
   farm.progress.unlockedAnimals = [...SEASON_CONTENT[season].animals];
   farm.farmDay.tiles = Array.from({ length: 16 }, (_, index) => ({
     areaId: Math.floor(index / 4), tileId: index % 4,
-    cropId: SEASON_CONTENT[season].crops[index % 4], focusSeconds: 900, harvested: false,
+    cropId: SEASON_CONTENT[season].crops[Math.floor(index / 4)], focusSeconds: (index % 4) * 300, harvested: false,
   }));
   return farm;
 }
