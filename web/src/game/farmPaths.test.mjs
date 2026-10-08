@@ -22,15 +22,15 @@ test('routes stay on unlocked paths on desktop and mobile, including bed approac
     }
     if (!frame.sidePens) {
       const pen = penOrigin(1, 4, frame)
-      assert.ok(pathRoute({x:192,y:192},{x:pen.x+192,y:pen.y+320},paths).length > 0)
+      assert.ok(pathRoute({x:192,y:192},{x:pen.x+192,y:pen.y+336},paths).length > 0)
     }
     if (frame.sidePens) {
       const second = penOrigin(1, 4, frame)
-      const destination = {x:second.x+96,y:second.y+192}
+      const destination = {x:second.x+64,y:second.y+192}
       assert.deepEqual(pathRoute({x:192,y:192},destination,farmPaths(3,frame,["chicken","rabbit"])).at(-1),destination)
       const pen = penOrigin(0, 4, frame)
-      assert.ok(paths.has(`${pen.x+96},${pen.y+192}`))
-      assert.equal(farmPaths(4, frame, []).has(`${pen.x+96},${pen.y+192}`), false)
+      assert.ok(paths.has(`${pen.x+64},${pen.y+192}`))
+      assert.equal(farmPaths(4, frame, []).has(`${pen.x+64},${pen.y+192}`), false)
     }
   }
 })

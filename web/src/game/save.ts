@@ -64,7 +64,7 @@ export async function loadFarm(): Promise<FarmState | null> {
       request.onerror = () => reject(request.error);
     });
     await done;
-    return isRecord(value) && value.version === SAVE_VERSION && isFarmState(value.farm) ? value.farm : null;
+    return isRecord(value) && value.version === SAVE_VERSION && isFarmState(value.farm) ? discardOldCropCredit(value.farm) : null;
   } finally { db.close(); }
 }
 
@@ -92,7 +92,12 @@ export async function readFarmFile(file: File): Promise<FarmState> {
   catch { throw new Error("That file is not a valid Focus Valley save."); }
   if (!isRecord(data) || data.version !== SAVE_VERSION || !isFarmState(data.farm))
     throw new Error("That file is not a valid Focus Valley save.");
-  return data.farm;
+  return discardOldCropCredit(data.farm);
+}
+
+function discardOldCropCredit(farm: FarmState): FarmState {
+  const { cropCreditSeconds: _oldCredit, ...current } = farm as FarmState & { cropCreditSeconds?: number };
+  return current;
 }
 
 function isFarmState(value: unknown): value is FarmState {
@@ -100,6 +105,9 @@ function isFarmState(value: unknown): value is FarmState {
     !isRecord(value.farmDay) || !isRecord(value.pens) || !isRecord(value.inventory) || !Array.isArray(value.sessions)) return false;
   try { new Intl.DateTimeFormat("en", { timeZone: value.timeZone }); } catch { return false; }
 
+  if (value.cropCreditSeconds !== undefined && !isSeconds(value.cropCreditSeconds)) return false;
+  if (value.bonusRemainderSeconds !== undefined && (!isCount(value.bonusRemainderSeconds) || (value.bonusRemainderSeconds as number) >= 1500 || (value.bonusRemainderSeconds as number) % 60 !== 0)) return false;
+  if (value.bonusBankSeconds !== undefined && (!isCount(value.bonusBankSeconds) || (value.bonusBankSeconds as number) > 900 || (value.bonusBankSeconds as number) % 60 !== 0)) return false;
   const avatar = value.avatar, progress = value.progress, day = value.farmDay;
   if (!( ["black", "brown", "golden"].includes(String(avatar.hair)) && ["light", "brown", "deep"].includes(String(avatar.skin)) &&
     ["tomato", "sunflower", "sage"].includes(String(avatar.shirt)) && ["denim", "cocoa", "charcoal"].includes(String(avatar.pants)))) return false;
@@ -113,7 +121,8 @@ function isFarmState(value: unknown): value is FarmState {
     isRecord(tile) && Number.isInteger(tile.areaId) && (tile.areaId as number) >= 0 && (tile.areaId as number) < 4 &&
     Number.isInteger(tile.tileId) && (tile.tileId as number) >= 0 && (tile.tileId as number) < 4 &&
     typeof tile.cropId === "string" && crops.has(tile.cropId) && typeof tile.harvested === "boolean" && isSeconds(tile.focusSeconds) && (tile.focusSeconds as number) <= CYCLE_SECONDS)) return false;
-  if (!Object.entries(value.pens).every(([animal, cycle]) => animals.has(animal) && isRecord(cycle) && isSeconds(cycle.focusSeconds) && (cycle.focusSeconds as number) <= CYCLE_SECONDS)) return false;
+  if (!Object.entries(value.pens).every(([animal, cycle]) => animals.has(animal) && isRecord(cycle) && isSeconds(cycle.focusSeconds) && (cycle.focusSeconds as number) <= CYCLE_SECONDS &&
+    (cycle.visibleProduce === undefined || (isCount(cycle.visibleProduce) && (cycle.visibleProduce as number) <= 4)))) return false;
   if (!Object.entries(value.inventory).every(([id, count]) => /^(crop|animal):/.test(id) &&
     ((id.startsWith("crop:") && crops.has(id.slice(5))) || (id.startsWith("animal:") && animals.has(id.slice(7)))) && isCount(count))) return false;
 

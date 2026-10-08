@@ -17,11 +17,14 @@ type FarmState = {
   avatar: FarmerAppearance;
   progress: {
     season: Season; activeDaysInSeason: number; totalActiveDays: number;
+    // Saved field names retained; both counters include crop and animal cycles.
     seasonHarvests: number; totalHarvests: number; unlockedAreaCount: number;
     harvestedTiles: boolean[][]; unlockedAnimals: string[]; nextBedIndex: number;
   };
+  bonusBankSeconds?: number;
+  bonusRemainderSeconds?: number;
   farmDay: FarmDay;
-  pens: Record<string, CycleProgress>;
+  pens: Record<string, CycleProgress & { visibleProduce?: number }>;
   inventory: Record<string, number>;
   sessions: FocusSession[];
 };

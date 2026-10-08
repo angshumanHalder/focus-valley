@@ -65,15 +65,25 @@ button.primary:hover { background: #245537; }
 .planting-controls button { width: 100%; }
 .farm-item-section { margin-bottom: 1rem; }
 .farm-item-row { display: flex; gap: .4rem; }
-.planting-controls .farm-item { flex: 0 1 4.5rem; min-width: 0; width: 4.5rem; min-height: 5rem; padding: .35rem .2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .2rem; background: #fff; color: #293b28; border: 2px solid #d8dece; border-radius: 4px; font-size: .65rem; font-weight: 600; }
+.planting-controls .farm-item { position: relative; flex: 0 1 4.5rem; min-width: 0; width: 4.5rem; min-height: 5rem; padding: .35rem .2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .2rem; background: #fff; color: #293b28; border: 2px solid #d8dece; border-radius: 4px; font-size: .65rem; font-weight: 600; }
 .planting-controls .farm-item:hover { background: #fff; border-color: #bda16c; }
 .planting-controls .farm-item[aria-pressed="true"] { border-color: #d7ae62; box-shadow: 0 0 0 1px #d7ae62; }
 .planting-controls .farm-item:disabled { opacity: 1; color: #697063; border-color: #d8dece; }
+.farm-item-lock { position: absolute; inset: 0; display: grid; place-items: center; border-radius: inherit; background: #17251e66; pointer-events: none; }
+.farm-item-lock svg { width: 28px; height: 32px; }
 .farm-item small { color: #716147; font-size: .6rem; }
 .item-sprite { display: block; flex-shrink: 0; width: 44px; height: 44px; overflow: hidden; image-rendering: pixelated; }
 .sprite-pending { display: grid; place-items: center; color: #697063; font-size: 1.5rem; }
 .animal-detail { margin: .6rem 0 0; color: #e0dfcf; }
 .planting-controls p { font-size: .8rem; }
+.bonus-panel { margin: .75rem 0; padding: .75rem; border: 2px solid #bda16c; border-radius: 3px; background: #314831; }
+.bonus-panel p { margin: 0; color: #fff3cf; line-height: 1.5; }
+.bonus-panel strong, .bonus-controls label { color: #ffe1a1; font-weight: 700; }
+.bonus-panel strong { font-size: .95rem; }
+.bonus-controls { display: grid; gap: .45rem; margin: .75rem 0; font-size: .8rem; }
+.bonus-controls input { box-sizing: border-box; width: 100%; min-height: 44px; padding: .6rem .75rem; border: 2px solid #ac9865; border-radius: 3px; color: #243827; background: #fff9e9; font: inherit; font-weight: 700; }
+.bonus-controls > button { width: 100%; min-height: 44px; border-radius: 3px; background: #e4c487; color: #203722; }
+.bonus-controls > button:hover { background: #f0d69f; }
 .hud-content .choices { gap: .4rem; }
 .hud-content .choices label { padding: .4rem; font-size: .85rem; }
 .hud-content .notice:empty { display: none; }
@@ -86,6 +96,10 @@ button:disabled { opacity: .55; cursor: default; }
 .season-preview-controls { position: fixed; top: 1rem; left: 1rem; right: 1rem; z-index: 8; width: fit-content; max-width: calc(100% - 4rem); display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; padding: .75rem; background: #203722f0; border: 2px solid #ac9865; border-radius: 3px; }
 .season-preview-controls select { min-height: 44px; padding: .5rem; font: inherit; color: #243827; background: white; }
 .season-preview-controls span { font-size: .75rem; color: #d1debf; }
+.simulation-controls { max-width: min(30rem, calc(100vw - 4rem)); }
+.simulation-clock, .simulation-results { padding: .75rem 0; border-top: 1px solid #ac986555; }
+.simulation-clock p, .simulation-results p { font-size: .8rem; }
+.simulation-clock button { min-height: 44px; padding: .5rem; font-size: .8rem; }
 
 .hud-buttons { display: flex; gap: .5rem; justify-content: flex-end; }
 .avatar-content h2 { margin: .1rem 0 .5rem; }
@@ -103,7 +117,8 @@ button:disabled { opacity: .55; cursor: default; }
 .inventory-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .inventory-heading h2, .inventory-heading h3 { margin: 0; }
 .inventory-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .75rem; }
-.inventory-items button { display: flex; flex-direction: column; align-items: center; gap: .3rem; }
+.inventory-items button { position: relative; display: flex; flex-direction: column; align-items: center; gap: .3rem; }
+.inventory-items button:disabled { opacity: 1; cursor: default; }
 .inventory-dialog button[aria-pressed="true"] { outline: 3px solid #e9c475; outline-offset: 1px; }
 
 .inventory-dialog > section { margin-top: 1.75rem; }

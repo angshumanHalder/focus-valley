@@ -18,7 +18,9 @@ const GROUND: Record<Season, string> = {
 };
 
 function App() {
-  const [entry, setEntry] = useState<"guest" | "preview" | null>(null);
+  const [entry, setEntry] = useState<"guest" | "preview" | "simulation" | null>(null);
+  const [simulationSeason, setSimulationSeason] = useState<Season>("spring");
+  const [simulationRun, setSimulationRun] = useState(0);
   const [playMenu, setPlayMenu] = useState(false);
   const [hasSave, setHasSave] = useState(false);
   const [saveChecked, setSaveChecked] = useState(false);
@@ -38,7 +40,18 @@ function App() {
     <>
       <div className="season-backdrop" aria-hidden="true" style={{ backgroundImage: `url(${GROUND[season]})` }} />
       <main className="game-world">
-        {entry === "preview" ? <>
+        {entry === "simulation" ? <>
+          <GuestFarm key={`${simulationSeason}-${simulationRun}`} simulationSeason={simulationSeason} onSeasonChange={setSeason} />
+          <nav className="season-preview-controls simulation-controls" aria-label="Simulation controls">
+            <button type="button" onClick={() => setEntry(null)}>Back</button>
+            <label htmlFor="simulation-season">Starting season</label>
+            <select id="simulation-season" value={simulationSeason} onChange={event => setSimulationSeason(event.target.value as Season)}>
+              {SEASONS.map(value => <option key={value} value={value}>{value}</option>)}
+            </select>
+            <button type="button" onClick={() => setSimulationRun(run => run + 1)}>Reset simulation</button>
+            <span>Temporary farm · no saves</span>
+          </nav>
+        </> : entry === "preview" ? <>
           <FarmCanvas farm={farm} active={null} autoplay showcase />
           <nav className="season-preview-controls" aria-label="Farm preview">
             <button type="button" onClick={() => setEntry(null)}>Back</button>
@@ -57,6 +70,7 @@ function App() {
               {!playMenu ? <div className="title-actions">
                 <button type="button" onClick={() => setPlayMenu(true)}>Play</button>
                 <button type="button" onClick={() => setEntry("preview")}>Preview seasons</button>
+                <button type="button" onClick={() => setEntry("simulation")}>Simulation</button>
               </div> : <div className="title-actions">
                 <button type="button" className="guest-entry" disabled={!saveChecked} onClick={async () => {
                   if (hasSave && !window.confirm("Starting a new game will replace your current farm. Continue?")) return;

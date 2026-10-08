@@ -1,7 +1,9 @@
+import { SEASONS, SEASON_CONTENT } from "./farm.ts";
+
 type Rect = readonly [x: number, y: number, width: number, height: number];
 
 // Rows follow SEASON_CONTENT crops; columns are planted / 5 / 10 / 15 minutes.
-// Preview cuts from the generated sheets, pending the in-bed alignment review.
+// Approved source cuts and positioning are shared by previews and gameplay.
 export const CROP_GROWTH_FRAMES: Record<Season, readonly (readonly Rect[])[]> = {
   spring: [
     [[47,148,30,36], [541,58,150,135], [1165,29,171,165], [1838,22,174,172]],
@@ -34,3 +36,17 @@ export const CROP_GROWTH_FRAMES: Record<Season, readonly (readonly Rect[])[]> = 
     [[34,677,34,34], [563,612,96,125], [1208,566,114,172], [1876,552,181,187]],
   ],
 };
+
+export function cropSprite(crop: string, stage: number, leftmost: boolean) {
+  const season = SEASONS.find(value => SEASON_CONTENT[value].crops.includes(crop));
+  if (!season) throw new Error(`Unknown crop: ${crop}`);
+  const mature = CROP_GROWTH_FRAMES[season][SEASON_CONTENT[season].crops.indexOf(crop)][3];
+  let offsetY = 0, offsetX = 0;
+  if (stage === 0) offsetY = season === "autumn" ? -8 : -10;
+  if (stage === 1) {
+    if (["rice", "okra", "pumpkin", "carrot", "cabbage", "cauliflower"].includes(crop)) offsetY = -5;
+    if (leftmost && (season === "spring" || season === "summer"))
+      offsetX = ["strawberry", "peas", "corn"].includes(crop) ? -2 : -1;
+  }
+  return { texture: `growth-${season}`, frame: `${crop}-${stage}`, scale: 26 / Math.max(mature[2], mature[3]), offsetX, offsetY };
+}

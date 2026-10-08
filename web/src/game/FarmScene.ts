@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { bedState, growthStage, SEASON_CONTENT } from "./farm.ts";
+import { bedState, growthStage, penProduceCount, SEASON_CONTENT } from "./farm.ts";
 import { advancePath, farmPaths, nearestPath, pathRoute, pathStep, type Direction, type FarmPaths, type PathPoint } from "./farmPaths.ts";
 import { farmerPosition } from "./farmWalk.ts";
 import { areaOrigin, frameAreas, penOrigin } from "./sceneLayout.ts";
@@ -13,8 +13,8 @@ import { SEASONAL_FRAMES, animalPopulation, ANIMAL_PRODUCTS } from "./seasonalFr
 import autumnGround from "../../../art/source/environment/ground/autumn-ground.png?url";
 import winterGround from "../../../art/source/environment/ground/winter-ground.png?url";
 
-import { ROSTERS, CROP_SHEETS, ANIMAL_SHEETS, GROWTH_SHEETS } from "./spriteAssets.ts";
-import { CROP_GROWTH_FRAMES } from "./cropGrowthFrames.ts";
+import { ROSTERS, ANIMAL_SHEETS, GROWTH_SHEETS } from "./spriteAssets.ts";
+import { CROP_GROWTH_FRAMES, cropSprite } from "./cropGrowthFrames.ts";
 import { recolorFarmer } from "./avatar.ts";
 
 export type Bed = { areaId: number; tileId: number };
@@ -27,7 +27,6 @@ const PLANT_OFFSETS = Array.from({ length: 16 }, (_, index) => [[38, 59, 84, 105
 
 export class FarmScene extends Phaser.Scene {
   private ground?: Phaser.GameObjects.Graphics;
-  private plants?: Phaser.GameObjects.Graphics;
   private farmerShadow?: Phaser.GameObjects.Graphics;
   private farmer?: Phaser.GameObjects.Image;
   private butterfly?: Phaser.GameObjects.Graphics;
@@ -39,7 +38,7 @@ export class FarmScene extends Phaser.Scene {
   private running = false;
   private activeAnimal: string | null = null;
   private tending = false;
-  private cropImages: { image: Phaser.GameObjects.Image; tile: FarmTile; index: number }[] = [];
+  private cropImages: { image: Phaser.GameObjects.Image; tile: FarmTile; index: number; x: number; y: number; leftmost: boolean }[] = [];
   private spriteImages: Phaser.GameObjects.Image[] = [];
   private previewLabels: Phaser.GameObjects.Text[] = [];
   private animalImages: { image: Phaser.GameObjects.Image; sleepMark: Phaser.GameObjects.Text; animalId: string; x: number; y: number; unlocked: boolean; scaleX: number; scaleY: number }[] = [];
@@ -68,7 +67,6 @@ export class FarmScene extends Phaser.Scene {
     this.load.image("autumn-ground", autumnGround);
     this.load.image("winter-ground", winterGround);
     for (const [season, url] of Object.entries(ROSTERS)) this.load.image(`roster-${season}`, url);
-    for (const [crop, url] of Object.entries(CROP_SHEETS)) this.load.image(`crop-${crop}`, url);
     for (const [season, url] of Object.entries(GROWTH_SHEETS)) this.load.image(`growth-${season}`, url);
     for (const [animal, url] of Object.entries(ANIMAL_SHEETS)) this.load.image(`animal-${animal}`, url);
   }
@@ -78,8 +76,6 @@ export class FarmScene extends Phaser.Scene {
     for (let row = 0; row < 4; row++)
       for (let column = 0; column < 5; column++)
         sheet.add(`${row}-${column}`, 0, 95 + column * 242, 30 + row * 257, 240, 245);
-    for (const crop of Object.keys(CROP_SHEETS))
-      this.textures.get(`crop-${crop}`).add("mature", 0, 1403, 500, 256, 320);
     for (const season of Object.keys(GROWTH_SHEETS) as Season[])
       CROP_GROWTH_FRAMES[season].forEach((stages, cropIndex) => {
         const crop = SEASON_CONTENT[season].crops[cropIndex];
@@ -91,16 +87,12 @@ export class FarmScene extends Phaser.Scene {
     for (const season of Object.keys(ROSTERS) as (keyof typeof ROSTERS)[]) {
       const source = this.textures.get(`roster-${season}`).getSourceImage() as HTMLImageElement;
       const frames = SEASONAL_FRAMES[season];
-      SEASON_CONTENT[season].crops.forEach((crop, index) => {
-        this.textures.addImage(`crop-${crop}`, source)!.add("mature", 0, ...frames.crops[index]);
-      });
       SEASON_CONTENT[season].animals.forEach((animal, index) => {
         const texture = this.textures.addImage(`animal-${animal}`, source)!;
         frames.animals[index].forEach((rect, pose) => texture.add(String(pose), 0, ...rect));
       });
     }
     this.ground = this.add.graphics().setDepth(0);
-    this.plants = this.add.graphics().setDepth(3);
     this.farmerShadow = this.add.graphics().setDepth(4);
     // Keep the whole farmer above locked-area shading (depth 7).
     this.farmer = this.add.image(192, 192, "farmer-sheet", "0-0").setOrigin(0.5, 1).setDisplaySize(64, 64).setDepth(8);
@@ -143,7 +135,7 @@ export class FarmScene extends Phaser.Scene {
     this.running = running;
     this.activeAnimal = activeAnimal;
     if (avatarChanged) this.applyFarmerAppearance(farm.avatar);
-    const availableAreas = active ? active.areaId + 1 : farm.progress.unlockedAreaCount;
+    const availableAreas = farm.progress.unlockedAreaCount;
     this.paths = farmPaths(availableAreas, frame, farm.progress.unlockedAnimals, SEASON_CONTENT[farm.progress.season].animals);
     if (reposition && this.farmer) {
       const origin = areaOrigin(active?.areaId ?? 0, frame.columns);
@@ -156,7 +148,7 @@ export class FarmScene extends Phaser.Scene {
       if (running && activeAnimal && this.farmer) {
         const index = SEASON_CONTENT[farm.progress.season].animals.indexOf(activeAnimal);
         const origin = penOrigin(index, 4, frame);
-        this.route = pathRoute(this.farmer, { x: origin.x + (frame.sidePens ? 96 : 192), y: origin.y + (frame.sidePens ? 192 : 320) }, this.paths);
+        this.route = pathRoute(this.farmer, { x: origin.x + (frame.sidePens ? 64 : 192), y: origin.y + (frame.sidePens ? 192 : 336) }, this.paths);
       }
       if (running && active && this.farmer) {
         const origin = areaOrigin(active.areaId, frame.columns);
@@ -192,7 +184,7 @@ export class FarmScene extends Phaser.Scene {
   }
 
   private renderFarm() {
-    if (!this.ground || !this.plants || !this.farmer || !this.farm || !this.frame) return;
+    if (!this.ground || !this.farmer || !this.farm || !this.frame) return;
     const { columns, zoom, inset, topInset, width, height } = this.frame;
     this.scale.resize(width, height);
     const camera = this.cameras.main;
@@ -238,22 +230,13 @@ export class FarmScene extends Phaser.Scene {
         const by = y + offsetY;
         const tile = this.farm!.farmDay.tiles.find(entry => entry.areaId === areaId && entry.tileId === tileId);
         this.spriteImages.push(this.add.image(bx, by, "raised-bed").setOrigin(0).setDisplaySize(BED_WIDTH, 124).setDepth(1));
-        if (tile && this.textures.exists(`crop-${tile.cropId}`))
+        if (tile)
           for (const [plantX, plantY] of PLANT_OFFSETS) {
-            const texture = this.showcase ? `growth-${this.farm!.progress.season}` : `crop-${tile.cropId}`;
-            const stage = growthStage(tile);
-            const frame = this.showcase ? `${tile.cropId}-${stage}` : "mature";
-            let growthOffsetY = 0;
-            if (this.showcase) {
-              if (stage === 0) growthOffsetY = this.farm!.progress.season === "autumn" ? -8 : -10;
-              else if (stage === 1 && ["rice", "okra", "pumpkin", "carrot", "cabbage", "cauliflower"].includes(tile.cropId)) growthOffsetY = -5;
-            }
-            const growthOffsetX = this.showcase && stage === 1 && plantX === PLANT_OFFSETS[0][0] &&
-              ["spring", "summer"].includes(this.farm!.progress.season)
-              ? (["strawberry", "peas", "corn"].includes(tile.cropId) ? -2 : -1) : 0;
-            const image = this.add.image(bx + plantX + growthOffsetX, by + plantY + growthOffsetY, texture, frame).setOrigin(0.5, 1).setDisplaySize(26, 26).setDepth(3);
+            const leftmost = plantX === PLANT_OFFSETS[0][0];
+            const sprite = cropSprite(tile.cropId, growthStage(tile), leftmost);
+            const image = this.add.image(bx + plantX, by + plantY, sprite.texture, sprite.frame).setOrigin(0.5, 1).setDepth(3);
             this.spriteImages.push(image);
-            this.cropImages.push({ image, tile, index: areaId * 4 + tileId });
+            this.cropImages.push({ image, tile, index: areaId * 4 + tileId, x: bx + plantX, y: by + plantY, leftmost });
           }
         if (this.showcase)
           this.previewLabels.push(this.add.text(bx + BED_WIDTH / 2, by + 111, ["Planted", "5 min", "10 min", "15 min"][tileId], {
@@ -291,7 +274,7 @@ export class FarmScene extends Phaser.Scene {
       const scaleX = size / (animal in ANIMAL_SHEETS ? texture.get("0").width : extent);
       const scaleY = size / (animal in ANIMAL_SHEETS ? texture.get("0").height : extent);
       const positions = count === 4 ? [[112, 202], [262, 202], [132, 272], [272, 272]] : [[128, 234], [264, 244]];
-      for (const [animalX, animalY] of positions) {
+      for (const [animalX, animalY] of unlocked ? positions : []) {
         const x = origin.x + animalX;
         const y = origin.y + animalY;
         const image = this.add.image(x, y, `animal-${animal}`, "0").setOrigin(0.5, 1).setScale(scaleX, scaleY).setDepth(5);
@@ -421,46 +404,28 @@ export class FarmScene extends Phaser.Scene {
   }
 
   private renderPlants(sway: number) {
-    if (!this.plants || !this.farm) return;
-    this.plants.clear();
-    this.cropImages.forEach(({ image, tile, index }) => {
-      if (this.showcase) {
-        const cropIndex = SEASON_CONTENT[this.farm!.progress.season].crops.indexOf(tile.cropId);
-        const mature = CROP_GROWTH_FRAMES[this.farm!.progress.season][cropIndex][3];
-        image.setVisible(true).setScale(26 / Math.max(mature[2], mature[3])).setAngle(0).clearTint();
-        return;
-      }
+    if (!this.farm) return;
+    this.cropImages.forEach(({ image, tile, index, x, y, leftmost }) => {
       const state = this.autoplay && !this.showcase ? previewGrowth(this.elapsed / 1000, index) : tile;
-      const stage = growthStage({ ...tile, ...state });
-      image.setVisible(this.autoplay && !this.showcase ? !state.harvested && stage > 0 : stage >= 3);
-      const size = this.autoplay && !this.showcase ? 8 + stage * 6 : 26;
-      const animated = this.autoplay || this.running && bedState(this.farm!, tile.areaId, tile.tileId) === "active";
-      if (tile.cropId in CROP_SHEETS) image.setDisplaySize(size, size);
-      else image.setScale(size / Math.max(image.frame.width, image.frame.height));
-      image.setAngle(this.reducedMotion || !animated ? 0 : sway * 2 - 1);
-      image.setTint(stage < 2 ? 0x9ca85a : 0xffffff);
+      const stage = growthStage(state);
+      const sprite = cropSprite(tile.cropId, stage, leftmost);
+      image.setTexture(sprite.texture, sprite.frame).setScale(sprite.scale).setPosition(x + sprite.offsetX, y + sprite.offsetY);
+      image.setVisible(!(this.autoplay && !this.showcase && state.harvested));
+      const animated = !this.showcase && (this.autoplay || this.running && bedState(this.farm!, tile.areaId, tile.tileId) === "active");
+      image.setAngle(this.reducedMotion || !animated || stage === 0 ? 0 : sway * 2 - 1);
     });
-    if (this.showcase) return;
-    for (const source of this.farm.farmDay.tiles) {
-      const tile = this.autoplay && !this.showcase ? { ...source, ...previewGrowth(this.elapsed / 1000, source.areaId * 4 + source.tileId) } : source;
-      if (this.autoplay && growthStage(tile) > 0) continue;
-      if (tile.harvested || growthStage(tile) >= 3 && this.textures.exists(`crop-${tile.cropId}`)) continue;
-      const [offsetX, offsetY] = BED_OFFSETS[tile.tileId];
-      const origin = areaOrigin(tile.areaId, this.frame!.columns);
-      for (const [plantX, plantY] of PLANT_OFFSETS)
-        this.drawCrop(this.plants, origin.x + offsetX + plantX, origin.y + offsetY + plantY, tile, this.autoplay || this.running && bedState(this.farm, tile.areaId, tile.tileId) === "active" ? sway : 0);
-    }
   }
 
   private renderProduce() {
     const g = this.produce!;
     g.clear();
     if (!this.farm || !this.frame) return;
-    this.farm.progress.unlockedAnimals.forEach((animal, index) => {
+    SEASON_CONTENT[this.farm.progress.season].animals.forEach((animal, index) => {
+      if (!this.farm!.progress.unlockedAnimals.includes(animal)) return;
       const product = ANIMAL_PRODUCTS[animal];
       if (!product) return;
-      const origin = penOrigin(index, this.farm!.progress.unlockedAreaCount, this.frame!);
-      const count = this.showcase ? 4 : this.autoplay ? previewProduce(this.elapsed / 1000, index) : Math.min(4, this.farm!.inventory[`animal:${animal}`] ?? 0);
+      const origin = penOrigin(index, 4, this.frame!);
+      const count = this.showcase ? 4 : this.autoplay ? previewProduce(this.elapsed / 1000, index) : penProduceCount(this.farm!, animal);
       const population = animalPopulation(animal);
       const perAnimal = 4 / population;
       for (let i = 0; i < count; i++) {
@@ -496,26 +461,6 @@ export class FarmScene extends Phaser.Scene {
     }
   }
 
-  private drawCrop(graphics: Phaser.GameObjects.Graphics, x: number, y: number, tile: FarmTile, sway: number) {
-    const stage = growthStage(tile);
-    if (stage === 0) {
-      graphics.fillStyle(0x4f8a42).fillRect(x - 2, y - 3, 4, 3);
-      return;
-    }
-    const height = 5 + stage * 8;
-    graphics.fillStyle(0x46352b, 0.35).fillEllipse(x + 3, y + 1, 18, 5);
-    graphics.fillStyle(0x2f6b38).fillRect(x - 2, y - height, 4, height);
-    graphics.fillStyle(0x427f43).fillEllipse(x - 7 + sway, y - height + 7, 11 + stage / 2, 6);
-    graphics.fillStyle(0x68a455).fillEllipse(x + 7 + sway, y - height + 11, 11 + stage / 2, 6);
-    graphics.fillStyle(0x9cc46b).fillRect(x - 10 + sway, y - height + 5, 4, 1);
-    if (stage >= 2) {
-      const fruitColor = tile.cropId === "peas" ? 0x9bbf54 : tile.cropId === "radish" ? 0xbd4354 : 0xd9564e;
-      graphics.fillStyle(fruitColor);
-      graphics.fillCircle(x - 6 + sway, y - height + 10, 3 + stage / 4);
-      graphics.fillCircle(x + 7 + sway, y - height + 14, 3 + stage / 4);
-    }
-  }
-
   private showFarmerFrame(frame: string) {
     if (this.farmer && this.lastFarmerFrame !== frame) {
       this.farmer.setFrame(frame);
@@ -544,7 +489,7 @@ export class FarmScene extends Phaser.Scene {
         if (!this.tending) { this.tending = true; this.walkStart = time; }
         const index = SEASON_CONTENT[this.farm!.progress.season].animals.indexOf(this.activeAnimal);
         const origin = penOrigin(index, 4, this.frame);
-        const target = nearestPath({ x: origin.x + (this.frame.sidePens ? 96 : 192), y: origin.y + (this.frame.sidePens ? 192 : 320) }, this.paths);
+        const target = nearestPath({ x: origin.x + (this.frame.sidePens ? 64 : 192), y: origin.y + (this.frame.sidePens ? 192 : 336) }, this.paths);
         walk = { x: target.x, y: target.y, facing: this.frame.sidePens ? "right" : "up", walking: false };
       }
       else if (this.running && this.active) {
@@ -557,7 +502,7 @@ export class FarmScene extends Phaser.Scene {
     this.showFarmerFrame(`${row}-${walk.walking && !this.reducedMotion ? 1 + Math.floor(time / 130) % 4 : 0}`);
     this.farmerShadow?.clear().fillStyle(0x4c603b, 0.4).fillEllipse(walk.x, walk.y + 1, 26, 6);
     this.animalImages.forEach(({ image, sleepMark, animalId, x, y, unlocked, scaleX, scaleY }, index) => {
-      const working = this.autoplay || this.running && this.activeAnimal === animalId;
+      const working = unlocked && (this.autoplay || this.running && this.activeAnimal === animalId);
       const still = this.reducedMotion || !working;
       const restingFrame = animalId in ANIMAL_SHEETS ? 2 : 3;
       sleepMark.setVisible(unlocked && !working && !this.autoplay);

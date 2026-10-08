@@ -4,29 +4,32 @@ import { initialTimer, timerReducer, type CompletedFocus } from "../reducers/tim
 type FocusFormProps = {
   target: FocusTarget | null;
   onFocusComplete: (focus: CompletedFocus) => void;
+  onFocusStart: (target: FocusTarget) => void;
   onFocusActiveChange: (active: boolean) => void;
   onFocusRunningChange: (running: boolean) => void;
   onFocusPreview: (intervals: RunningInterval[]) => void;
   plantedSeconds: number;
+  simulation?: boolean;
 };
 
-export const FocusForm = ({ target, onFocusComplete, onFocusActiveChange, onFocusRunningChange, onFocusPreview, plantedSeconds }: FocusFormProps) => {
+export const FocusForm = ({ target, onFocusComplete, onFocusStart, onFocusActiveChange, onFocusRunningChange, onFocusPreview, plantedSeconds, simulation = false }: FocusFormProps) => {
   const [timer, dispatch] = useReducer(timerReducer, initialTimer);
   const handledCompletions = useRef(0);
+  const handledStart = useRef("");
   const [now, setNow] = useState(Date.now);
   const [duration, setDuration] = useState("25");
   const [customMinutes, setCustomMinutes] = useState("30");
-  const [label, setLabel] = useState("");
+  const [label, setLabel] = useState(simulation ? "Simulation task" : "");
 
   useEffect(() => {
-    if (timer.status !== "running") return;
+    if (simulation || timer.status !== "running") return;
     const interval = window.setInterval(() => {
       const time = Date.now();
       setNow(time);
       dispatch({ type: "tick", now: time });
     }, 250);
     return () => window.clearInterval(interval);
-  }, [timer.status]);
+  }, [timer.status, simulation]);
 
   useEffect(() => {
     if (timer.lastCompletedFocus && handledCompletions.current < timer.completedFocusDurationsMs.length) {
@@ -43,10 +46,17 @@ export const FocusForm = ({ target, onFocusComplete, onFocusActiveChange, onFocu
     onFocusRunningChange(timer.kind === "focus" && timer.status === "running");
   }, [timer.kind, timer.status, onFocusRunningChange]);
 
+  useEffect(() => {
+    if (timer.kind === "focus" && timer.status !== "idle" && timer.target && handledStart.current !== timer.sessionId) {
+      handledStart.current = timer.sessionId;
+      onFocusStart(timer.target);
+    }
+  }, [timer.kind, timer.status, timer.target, timer.sessionId, onFocusStart]);
+
   const startFocus = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const minutes = Number(duration === "custom" ? customMinutes : duration);
-    const time = Date.now();
+    const time = simulation ? now : Date.now();
     setNow(time);
     if (!target) return;
     dispatch({ type: "startFocus", id: crypto.randomUUID(), label, minutes, now: time, target });
@@ -64,7 +74,7 @@ export const FocusForm = ({ target, onFocusComplete, onFocusActiveChange, onFocu
   useEffect(() => {
     onFocusPreview(timer.kind !== "focus" || timer.status === "idle" ? [] : [
       ...timer.runningIntervals,
-      ...(timer.status === "running" ? [{ startMs: timer.runningSinceMs, endMs: Math.min(Date.now(), timer.deadline) }] : []),
+      ...(timer.status === "running" ? [{ startMs: timer.runningSinceMs, endMs: Math.min(now, timer.deadline) }] : []),
     ]);
   }, [visualStage, timer.kind, timer.status, timer.runningIntervals, timer.runningSinceMs, timer.deadline, onFocusPreview]);
 
@@ -74,14 +84,29 @@ export const FocusForm = ({ target, onFocusComplete, onFocusActiveChange, onFocu
   const act = (
     type: "pause" | "resume" | "cancel" | "skipBreak",
   ) => {
-    const time = Date.now();
+    const time = simulation ? now : Date.now();
     setNow(time);
     dispatch({ type, now: time });
+  };
+
+  const advance = (milliseconds: number) => {
+    const time = now + milliseconds;
+    setNow(time);
+    dispatch({ type: "tick", now: time });
   };
 
   return (
     <>
       <h2 id="timer-heading">Focus timer</h2>
+      {simulation && <section className="simulation-clock" aria-label="Simulation clock">
+        <p>Time advances only with these controls. Pause and cancel use the normal game rules.</p>
+        <div className="choices">
+          <button type="button" onClick={() => advance(1000)} disabled={timer.status === "idle"}>+1 second</button>
+          <button type="button" onClick={() => advance(60_000)} disabled={timer.status === "idle"}>+1 minute</button>
+          <button type="button" onClick={() => advance(300_000)} disabled={timer.status === "idle"}>+5 minutes</button>
+          <button type="button" onClick={() => advance(Math.max(0, timer.deadline - now))} disabled={timer.status !== "running"}>Finish current timer</button>
+        </div>
+      </section>}
       {timer.status === "idle" ? (
         <form onSubmit={startFocus}>
           <label htmlFor="focus-label">What are you working on?</label>

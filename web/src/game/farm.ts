@@ -44,7 +44,7 @@ export const INVENTORY_ITEMS = SEASONS.flatMap(season => [
   ...SEASON_CONTENT[season].animals.map(source => ({ id: `animal:${source}`, source, season, kind: "animal" as const, name: `${source.replaceAll("-", " ")} ${ANIMAL_PRODUCTS[source]}` })),
 ]);
 const roundSeconds = (seconds: number) => Math.round(seconds * 1000) / 1000;
-export const bonusSeconds = (seconds: number) => Math.floor(seconds / 3000) * 600;
+export const bonusSeconds = (seconds: number, carriedSeconds = 0) => Math.floor((carriedSeconds + seconds) / 1500) * 60;
 
 export function createFarm(nowMs: number, timeZone: string): FarmState {
   return {
@@ -53,6 +53,7 @@ export function createFarm(nowMs: number, timeZone: string): FarmState {
     progress: { season: "spring", activeDaysInSeason: 0, totalActiveDays: 0, seasonHarvests: 0,
       totalHarvests: 0, unlockedAreaCount: 1, nextBedIndex: 0,
       harvestedTiles: Array.from({ length: 4 }, () => [false, false, false, false]), unlockedAnimals: [] },
+    bonusRemainderSeconds: 0,
     farmDay: { date: dateInZone(nowMs, dateFormatter(timeZone)), tiles: [], completedSessions: 0 },
     pens: {}, inventory: {}, sessions: [],
   };
@@ -99,6 +100,15 @@ function validateTarget(farm: FarmState, target: FocusTarget) {
   }
 }
 
+export function penProduceCount(farm: FarmState, animalId: string): number {
+  return farm.pens[animalId]?.visibleProduce ?? Math.min(4, farm.inventory[`animal:${animalId}`] ?? 0);
+}
+
+export function clearPenProduce(farm: FarmState, animalId: string): FarmState {
+  validateTarget(farm, { kind: "animal", animalId });
+  return { ...farm, pens: { ...farm.pens, [animalId]: { ...farm.pens[animalId], focusSeconds: farm.pens[animalId]?.focusSeconds ?? 0, visibleProduce: 0 } } };
+}
+
 function cropCycle(farm: FarmState, cropId: string): FarmTile {
   const bed = activeBed(farm);
   const index = farm.farmDay.tiles.findIndex(t => t.areaId === bed.areaId && t.tileId === bed.tileId);
@@ -111,7 +121,7 @@ function cropCycle(farm: FarmState, cropId: string): FarmTile {
 }
 
 // Mutates only a cloned state shared by completion and disposable live previews.
-function applyGrowth(farm: FarmState, target: FocusTarget, seconds: number, commit: boolean) {
+function applyGrowth(farm: FarmState, target: FocusTarget, seconds: number, commit: boolean): void {
   while (seconds > 0) {
     const tile = target.kind === "crop" ? cropCycle(farm, target.cropId) : null;
     const cycle = tile ?? (farm.pens[(target as { animalId: string }).animalId] ??= { focusSeconds: 0 });
@@ -121,21 +131,25 @@ function applyGrowth(farm: FarmState, target: FocusTarget, seconds: number, comm
     seconds = roundSeconds(seconds - used);
     if (cycle.focusSeconds < CYCLE_SECONDS) continue;
     if (commit) farm.inventory[itemId] = (farm.inventory[itemId] ?? 0) + 4;
+    const p = farm.progress;
+    p.totalHarvests++;
+    p.unlockedAreaCount = Math.max(p.unlockedAreaCount, Math.min(4, 1 + Math.floor(p.totalHarvests / 4)));
+    const seasonal = tile ? SEASON_CONTENT[p.season].crops.includes(tile.cropId)
+      : target.kind === "animal" && SEASON_CONTENT[p.season].animals.includes(target.animalId);
+    if (seasonal) {
+      p.seasonHarvests++;
+      SEASON_CONTENT[p.season].animals.forEach((animal, index) => {
+        if (p.seasonHarvests >= (index + 1) * 4 && !p.unlockedAnimals.includes(animal)) p.unlockedAnimals.push(animal);
+      });
+    }
     if (tile) {
       tile.harvested = true;
-      const p = farm.progress;
-      p.totalHarvests++;
       p.harvestedTiles[tile.areaId][tile.tileId] = true;
-      if (tile.areaId === p.unlockedAreaCount - 1 && p.unlockedAreaCount < 4 && p.harvestedTiles[tile.areaId].every(Boolean)) p.unlockedAreaCount++;
-      if (SEASON_CONTENT[p.season].crops.includes(tile.cropId)) {
-        p.seasonHarvests++;
-        SEASON_CONTENT[p.season].animals.forEach((animal, index) => {
-          if (p.seasonHarvests >= (index + 1) * 4 && !p.unlockedAnimals.includes(animal)) p.unlockedAnimals.push(animal);
-        });
-      }
       p.nextBedIndex = (p.nextBedIndex + 1) % (p.unlockedAreaCount * 4);
+      return;
     } else {
       cycle.focusSeconds = 0;
+      if (commit && target.kind === "animal") farm.pens[target.animalId].visibleProduce = 4;
     }
   }
 }
@@ -171,7 +185,23 @@ export function previewFocus(farm: FarmState, target: FocusTarget | null, interv
   const seconds = intervals.reduce((sum, i) => sum + Math.max(0, i.endMs - i.startMs) / 1000, 0);
   const preview = structuredClone(farm);
   applyGrowth(preview, target, seconds, false);
+  if (target.kind === "crop" && preview.progress.nextBedIndex === farm.progress.nextBedIndex) cropCycle(preview, target.cropId);
   return preview;
+}
+
+export function spendBonus(farm: FarmState, target: FocusTarget, minutes: number): FarmState {
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 15 || minutes * 60 > (farm.bonusBankSeconds ?? 0))
+    throw new RangeError("Choose available whole bonus minutes");
+  validateTarget(farm, target);
+  if (target.kind === "crop") {
+    const bed = activeBed(farm);
+    const partial = farm.farmDay.tiles.find(tile => tile.areaId === bed.areaId && tile.tileId === bed.tileId && !tile.harvested);
+    if (minutes * 60 > CYCLE_SECONDS - (partial?.focusSeconds ?? 0)) throw new RangeError("Bonus minutes exceed this bed's remaining growth");
+  }
+  const next = structuredClone(farm);
+  next.bonusBankSeconds = (next.bonusBankSeconds ?? 0) - minutes * 60;
+  applyGrowth(next, target, minutes * 60, true);
+  return next;
 }
 
 export function completeFocus(farm: FarmState, focus: { id: string; label: string; durationMs: number; target: FocusTarget | null; intervals: readonly RunningInterval[] }): FarmState {
@@ -195,15 +225,28 @@ export function completeFocus(farm: FarmState, focus: { id: string; label: strin
   const startMs = focus.intervals[0].startMs;
   if (farm.sessions.some(s => startMs < s.endMs)) throw new RangeError("Focus sessions cannot overlap");
   let next = structuredClone(farm);
+  const carriedBonus = farm.bonusRemainderSeconds ?? farm.sessions.reduce((sum, session) => sum + session.focusSeconds, 0) % 1500;
   const session: FocusSession = { id: focus.id, label: focus.label.trim(), target: { ...focus.target }, startMs, endMs: previousEnd,
-    completionDate: dateInZone(previousEnd, formatter), focusSeconds: seconds, bonusSeconds: bonusSeconds(seconds), focusSecondsByDate: {} };
+    completionDate: dateInZone(previousEnd, formatter), focusSeconds: seconds, bonusSeconds: bonusSeconds(seconds, carriedBonus), focusSecondsByDate: {} };
+  const cropTarget = focus.target.kind === "crop";
+  let cropHarvested = false;
   for (const piece of pieces) {
     next = advanceDate(next, piece.date);
     session.focusSecondsByDate[piece.date] = roundSeconds((session.focusSecondsByDate[piece.date] ?? 0) + piece.seconds);
-    applyGrowth(next, focus.target, piece.seconds, true);
+    if (!cropTarget || !cropHarvested) {
+      const harvests = next.progress.totalHarvests;
+      applyGrowth(next, focus.target, piece.seconds, true);
+      if (cropTarget) cropHarvested = next.progress.totalHarvests > harvests;
+    }
   }
   next = advanceDate(next, session.completionDate);
-  applyGrowth(next, focus.target, session.bonusSeconds, true);
+  next.bonusRemainderSeconds = roundSeconds((carriedBonus + seconds) % 1500);
+  next.bonusBankSeconds = Math.min(900, (next.bonusBankSeconds ?? 0) + session.bonusSeconds);
+  if (cropTarget) {
+    const bed = activeBed(next);
+    const index = next.farmDay.tiles.findIndex(tile => tile.areaId === bed.areaId && tile.tileId === bed.tileId && !tile.harvested);
+    if (index !== -1) next.farmDay.tiles.splice(index, 1);
+  } else if (focus.target.kind === "animal") next.pens[focus.target.animalId].focusSeconds = 0;
   if (next.farmDay.completedSessions === 0) {
     next.progress.activeDaysInSeason++;
     next.progress.totalActiveDays++;
