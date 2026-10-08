@@ -108,6 +108,8 @@ function isFarmState(value: unknown): value is FarmState {
   if (value.cropCreditSeconds !== undefined && !isSeconds(value.cropCreditSeconds)) return false;
   if (value.bonusRemainderSeconds !== undefined && (!isCount(value.bonusRemainderSeconds) || (value.bonusRemainderSeconds as number) >= 1500 || (value.bonusRemainderSeconds as number) % 60 !== 0)) return false;
   if (value.bonusBankSeconds !== undefined && (!isCount(value.bonusBankSeconds) || (value.bonusBankSeconds as number) > 900 || (value.bonusBankSeconds as number) % 60 !== 0)) return false;
+  if (value.breakCycleStart !== undefined && (!isCount(value.breakCycleStart) || (value.breakCycleStart as number) > value.sessions.length)) return false;
+  if (value.breakCycleStart !== undefined && value.sessions.length - (value.breakCycleStart as number) > 4) return false;
   const avatar = value.avatar, progress = value.progress, day = value.farmDay;
   if (!( ["black", "brown", "golden"].includes(String(avatar.hair)) && ["light", "brown", "deep"].includes(String(avatar.skin)) &&
     ["tomato", "sunflower", "sage"].includes(String(avatar.shirt)) && ["denim", "cocoa", "charcoal"].includes(String(avatar.pants)))) return false;

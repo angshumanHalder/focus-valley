@@ -7,12 +7,11 @@ type Props = {
   farm: FarmState;
   active: Bed | null;
   autoplay?: boolean;
-  showcase?: boolean;
   running?: boolean;
   activeAnimal?: string | null;
 };
 
-export function FarmCanvas({ farm, active, autoplay = false, running = false, showcase = false, activeAnimal = null }: Props) {
+export function FarmCanvas({ farm, active, autoplay = false, running = false, activeAnimal = null }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<FarmScene>(null);
   const [availableWidth, setAvailableWidth] = useState(window.innerWidth);
@@ -42,7 +41,7 @@ export function FarmCanvas({ farm, active, autoplay = false, running = false, sh
 
   useEffect(() => {
     if (!host.current) return;
-    const farmScene = new FarmScene();
+    const farmScene = new FarmScene(farm);
     scene.current = farmScene;
     const game = new Phaser.Game({
       type: Phaser.CANVAS,
@@ -62,8 +61,8 @@ export function FarmCanvas({ farm, active, autoplay = false, running = false, sh
   }, []);
 
   useEffect(() => {
-    scene.current?.sync(farm, active, frame, reducedMotion, autoplay, running, showcase, activeAnimal);
-  }, [farm, active?.areaId, active?.tileId, frame.columns, frame.rows, frame.zoom, frame.inset, frame.topInset, frame.width, frame.height, frame.sidePens, reducedMotion, autoplay, running, showcase, activeAnimal]);
+    scene.current?.sync(farm, active, frame, reducedMotion, autoplay, running, activeAnimal);
+  }, [farm, active?.areaId, active?.tileId, frame.columns, frame.rows, frame.zoom, frame.inset, frame.topInset, frame.width, frame.height, frame.sidePens, reducedMotion, autoplay, running, activeAnimal]);
 
   return (
     <>

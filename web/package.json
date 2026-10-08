@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "build": "vite build --manifest && node scripts/writeServiceWorker.mjs",
+    "preview": "vite preview",
     "test": "node --test"
   },
   "dependencies": {

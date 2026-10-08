@@ -23,6 +23,7 @@ type FarmState = {
   };
   bonusBankSeconds?: number;
   bonusRemainderSeconds?: number;
+  breakCycleStart?: number;
   farmDay: FarmDay;
   pens: Record<string, CycleProgress & { visibleProduce?: number }>;
   inventory: Record<string, number>;

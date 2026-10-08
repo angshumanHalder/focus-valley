@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createFarm } from "./farm.ts";
+import { completeFocus, createFarm } from "./farm.ts";
 import { readFarmFile } from "./save.ts";
 
 const fileFor = value => new Blob([JSON.stringify(value)]);
@@ -64,4 +64,16 @@ test('bonus bank accepts old saves and validates the fifteen-minute cap', async 
     farm.bonusBankSeconds=seconds;
     await assert.rejects(readFarmFile(fileFor({version:1,farm})),/valid Focus Valley save/);
   }
+});
+
+test('save files retain a pending long break and reject an invalid cycle marker', async () => {
+  let farm=createFarm(Date.UTC(2026,0,1),'UTC');
+  for(let index=0;index<4;index++) {
+    const start=Date.UTC(2026,0,1)+index*1200000;
+    farm=completeFocus(farm,{id:`focus-${index}`,label:'Work',durationMs:900000,target:{kind:'crop',cropId:'strawberry'},intervals:[{startMs:start,endMs:start+900000}]});
+  }
+  farm.breakCycleStart=0;
+  assert.deepEqual(await readFarmFile(fileFor({version:1,farm})),farm);
+  assert.deepEqual(await readFarmFile(fileFor({version:1,farm:{...farm,breakCycleStart:4}})),{...farm,breakCycleStart:4});
+  await assert.rejects(readFarmFile(fileFor({version:1,farm:{...farm,breakCycleStart:5}})),/valid Focus Valley save/);
 });

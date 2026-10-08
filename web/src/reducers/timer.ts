@@ -11,6 +11,7 @@ export type TimerState = {
   target: FocusTarget | null
   sessionId: string
   lastCompletedFocus: CompletedFocus | null
+  longBreakFinishedId: string
   notice: string
 }
 
@@ -43,7 +44,15 @@ export const initialTimer: TimerState = {
   target: null,
   sessionId: '',
   lastCompletedFocus: null,
+  longBreakFinishedId: '',
   notice: '',
+}
+
+export function restoreBreakCycle(durations: number[], pending: boolean, sessionId: string, now: number): TimerState {
+  // ponytail: Legacy saves without a timer snapshot restart a pending long break at 15 minutes.
+  return pending
+    ? { ...initialTimer, status: 'running', kind: 'break', remainingMs: 15 * 60_000, deadline: now + 15 * 60_000, completedFocusDurationsMs: durations, sessionId, notice: 'Long break ready.' }
+    : { ...initialTimer, completedFocusDurationsMs: durations }
 }
 
 export function timerReducer(state: TimerState, action: TimerAction): TimerState {
@@ -51,14 +60,15 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
     const label = action.label.trim()
     if (!label || !Number.isInteger(action.minutes) || action.minutes < 15 || action.minutes > 240) return state
     const remainingMs = action.minutes * 60_000
-    return { ...state, status: 'running', kind: 'focus', sessionId: action.id ?? String(action.now), label, focusDurationMs: remainingMs, remainingMs, deadline: action.now + remainingMs, runningSinceMs: action.now, runningIntervals: [], target: action.target ?? null, lastCompletedFocus: null, notice: '' }
+    return { ...state, status: 'running', kind: 'focus', sessionId: action.id ?? String(action.now), label, focusDurationMs: remainingMs, remainingMs, deadline: action.now + remainingMs, runningSinceMs: action.now, runningIntervals: [], target: action.target ?? null, lastCompletedFocus: null, longBreakFinishedId: '', notice: '' }
   }
 
   if (action.type === 'skipBreak' && state.kind === 'break' && state.status !== 'idle') {
     if (state.status === 'running' && action.now >= state.deadline) {
       return timerReducer(state, { type: 'tick', now: action.now })
     }
-    return { ...state, status: 'idle', remainingMs: 0, deadline: 0, notice: 'Break skipped. Ready to focus.' }
+    const longBreak = state.completedFocusDurationsMs.length === 4
+    return { ...state, status: 'idle', remainingMs: 0, deadline: 0, completedFocusDurationsMs: longBreak ? [] : state.completedFocusDurationsMs, longBreakFinishedId: longBreak ? state.sessionId : '', notice: 'Break skipped. Ready to focus.' }
   }
 
   if (action.type === 'cancel' && state.status !== 'idle') {
@@ -71,7 +81,8 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
   if ((action.type === 'tick' || action.type === 'pause') && state.status === 'running') {
     if (action.now >= state.deadline) {
       if (state.kind === 'break') {
-        return { ...state, status: 'idle', remainingMs: 0, deadline: 0, notice: 'Break complete. Ready to focus.' }
+        const longBreak = state.completedFocusDurationsMs.length === 4
+        return { ...state, status: 'idle', remainingMs: 0, deadline: 0, completedFocusDurationsMs: longBreak ? [] : state.completedFocusDurationsMs, longBreakFinishedId: longBreak ? state.sessionId : '', notice: 'Break complete. Ready to focus.' }
       }
       const completedFocusDurationsMs = [...state.completedFocusDurationsMs, state.focusDurationMs]
       const lastCompletedFocus: CompletedFocus = {
@@ -86,7 +97,8 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         : 5 * 60_000
       const deadline = state.deadline + breakDurationMs
       if (action.now >= deadline) {
-        return { ...state, status: 'idle', kind: 'break', remainingMs: 0, deadline: 0, completedFocusDurationsMs, runningIntervals: [], lastCompletedFocus, notice: `${state.label} and break complete. Ready to focus.` }
+        const longBreak = completedFocusDurationsMs.length === 4
+        return { ...state, status: 'idle', kind: 'break', remainingMs: 0, deadline: 0, completedFocusDurationsMs: longBreak ? [] : completedFocusDurationsMs, runningIntervals: [], lastCompletedFocus, longBreakFinishedId: longBreak ? state.sessionId : '', notice: `${state.label} and break complete. Ready to focus.` }
       }
       return { ...state, status: 'running', kind: 'break', remainingMs: deadline - action.now, deadline, completedFocusDurationsMs, runningIntervals: [], lastCompletedFocus, notice: `${state.label} complete. Break started.` }
     }

@@ -4,12 +4,6 @@ import { chartRange, inventoryStats, targetItemId, type ChartPeriod } from "../g
 import { ItemSprite } from "./ItemSprite";
 import { LockOverlay } from "./LockOverlay";
 
-const SAMPLE_MINUTES: Record<ChartPeriod, number[]> = {
-  week: [50, 75, 25, 100, 50, 0, 80],
-  month: [280, 410, 325, 465],
-  year: [840, 1120, 960, 1380, 1050, 720, 1280, 1560, 1190, 1430, 980, 1210],
-};
-
 function Chart({ values }: { values: { label: string; minutes: number }[] }) {
   const peak = Math.max(60, ...values.map(v => v.minutes));
   const tick = Math.ceil(peak / 4 / 15) * 15, max = tick * 4;
@@ -38,10 +32,9 @@ export function Inventory({ farm, onClose }: { farm: FarmState; onClose: () => v
   const [itemId, setItemId] = useState<string | undefined>();
   const [period, setPeriod] = useState<ChartPeriod>("week");
   const [anchor, setAnchor] = useState(farm.farmDay.date);
-  const [sample, setSample] = useState(true);
   useEffect(() => { dialog.current?.showModal(); }, []);
   const stats = inventoryStats(farm, period, anchor, itemId);
-  const values = sample ? stats.values.map((bar, index) => ({ ...bar, minutes: SAMPLE_MINUTES[period][index] })) : stats.values;
+  const values = stats.values;
   const minutes = values.reduce((sum, bar) => sum + bar.minutes, 0);
   const formatDate = (date: string, options: Intl.DateTimeFormatOptions) => new Date(date + "T00:00:00Z").toLocaleDateString("en", { ...options, timeZone: "UTC" });
   const rangeLabel = period === "year" ? stats.from.slice(0, 4) : period === "month"
@@ -58,7 +51,7 @@ export function Inventory({ farm, onClose }: { farm: FarmState; onClose: () => v
         const sessions = farm.sessions.filter(s => targetItemId(s.target) === i.id);
         const minutes = sessions.reduce((total, s) => total + s.focusSeconds / 60, 0);
         const locked = kind === "animal" && !farm.progress.unlockedAnimals.includes(i.source);
-        return <button key={i.id} type="button" aria-pressed={itemId === i.id} disabled={locked} onClick={() => setItemId(i.id)}><ItemSprite item={i.source} animal={kind === "animal"} /><strong>{i.name}</strong><span>{farm.inventory[i.id] ?? 0} collected</span><small>{minutes.toFixed(1)} focus min · {sessions.length} tasks</small>{locked && <LockOverlay />}</button>;
+        return <button key={i.id} type="button" aria-pressed={itemId === i.id} disabled={locked} onClick={() => setItemId(i.id)}>{!locked && <ItemSprite item={i.source} animal={kind === "animal"} />}<strong>{i.name}</strong><span>{farm.inventory[i.id] ?? 0} collected</span><small>{minutes.toFixed(1)} focus min · {sessions.length} tasks</small>{locked && <LockOverlay />}</button>;
       })}
     </div></section>)}
     <section className="inventory-activity" aria-label="Activity statistics"><div className="inventory-heading"><h3>{item?.name ?? "All activity"}</h3>{item && <button type="button" onClick={() => setItemId(undefined)}>Show all activity</button>}</div>
@@ -78,11 +71,10 @@ export function Inventory({ farm, onClose }: { farm: FarmState; onClose: () => v
       </div>
       <div className="activity-chart-panel">
         <div className="inventory-heading"><div><h4>Focus time</h4><p className="activity-total">{Number(minutes.toFixed(1))} <span>minutes</span></p></div>
-          <label className="sample-toggle"><input type="checkbox" checked={sample} onChange={e => setSample(e.target.checked)} /> Sample data</label>
         </div>
-        <p className="chart-caption">{sample ? "UI preview · illustrative values only; your farm progress is unchanged." : `${stats.completions} completed tasks in this period · growth bonuses excluded.`}</p>
+        <p className="chart-caption">{stats.completions} completed tasks in this period · growth bonuses excluded.</p>
         <Chart values={values} />
-        {!sample && minutes === 0 && <p className="chart-caption">No focus time in this period yet. Complete a timer or enable sample data to preview the chart.</p>}
+        {minutes === 0 && <p className="chart-caption">No focus time in this period yet. Complete a timer to see your progress.</p>}
         {period === "month" && <p className="chart-caption">Days 1–7, 8–14, 15–21 and 22–month-end.</p>}
       </div>
     </section>

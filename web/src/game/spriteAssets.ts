@@ -1,7 +1,3 @@
-import strawberry from "../../../art/source/crops/spring/strawberry-growth-sheet.png?url";
-import peas from "../../../art/source/crops/spring/peas-growth-sheet.png?url";
-import radish from "../../../art/source/crops/spring/radish-growth-sheet.png?url";
-import tulip from "../../../art/source/crops/spring/tulip-growth-sheet.png?url";
 import chicken from "../../../art/source/animals/spring/chicken-pose-sheet.png?url";
 import rabbit from "../../../art/source/animals/spring/rabbit-pose-sheet.png?url";
 import summerRoster from "../../../art/source/seasons/summer/roster-sheet.png?url";
@@ -13,7 +9,6 @@ import summerGrowth from "../../../art/source/crops/summer/growth-sheet.png?url"
 import rainyGrowth from "../../../art/source/crops/rainy/growth-sheet.png?url";
 import autumnGrowth from "../../../art/source/crops/autumn/growth-sheet.png?url";
 import winterGrowth from "../../../art/source/crops/winter/growth-sheet.png?url";
-export const CROP_SHEETS = { strawberry, peas, radish, tulip };
 export const ANIMAL_SHEETS = { chicken, rabbit };
 export const ROSTERS = { summer: summerRoster, rainy: rainyRoster, autumn: autumnRoster, winter: winterRoster };
 export const GROWTH_SHEETS = { spring: springGrowth, summer: summerGrowth, rainy: rainyGrowth, autumn: autumnGrowth, winter: winterGrowth };

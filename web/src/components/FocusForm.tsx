@@ -1,5 +1,7 @@
 import { SubmitEvent, useEffect, useReducer, useRef, useState } from "react";
-import { initialTimer, timerReducer, type CompletedFocus } from "../reducers/timer";
+import { restoreBreakCycle, timerReducer, type CompletedFocus, type TimerState } from "../reducers/timer";
+import { saveTimerState } from "../reducers/timerSave";
+import { playTimerSound } from "../utils/timerSound";
 
 type FocusFormProps = {
   target: FocusTarget | null;
@@ -9,34 +11,83 @@ type FocusFormProps = {
   onFocusRunningChange: (running: boolean) => void;
   onFocusPreview: (intervals: RunningInterval[]) => void;
   plantedSeconds: number;
-  simulation?: boolean;
+  cycleDurationsMs: number[];
+  longBreakPending: boolean;
+  lastSessionId: string;
+  onLongBreakFinished: () => void;
+  restoredTimer?: TimerState | null;
 };
 
-export const FocusForm = ({ target, onFocusComplete, onFocusStart, onFocusActiveChange, onFocusRunningChange, onFocusPreview, plantedSeconds, simulation = false }: FocusFormProps) => {
-  const [timer, dispatch] = useReducer(timerReducer, initialTimer);
-  const handledCompletions = useRef(0);
+export const FocusForm = ({ target, onFocusComplete, onFocusStart, onFocusActiveChange, onFocusRunningChange, onFocusPreview, plantedSeconds, cycleDurationsMs, longBreakPending, lastSessionId, onLongBreakFinished, restoredTimer }: FocusFormProps) => {
+  const [timer, dispatch] = useReducer(timerReducer, null, () => restoredTimer
+    ? timerReducer(restoredTimer, { type: "tick", now: Date.now() })
+    : restoreBreakCycle(cycleDurationsMs, longBreakPending, lastSessionId, Date.now()));
+  const [timerSaveFailed, setTimerSaveFailed] = useState(false);
+  const audioContext = useRef<AudioContext | null>(null);
+  const [soundOn, setSoundOn] = useState(() => {
+    try { return window.localStorage.getItem("focus-valley-sound") !== "off"; }
+    catch { return true; }
+  });
+  const handledCompletion = useRef("");
+  const handledLongBreak = useRef("");
   const handledStart = useRef("");
   const [now, setNow] = useState(Date.now);
   const [duration, setDuration] = useState("25");
   const [customMinutes, setCustomMinutes] = useState("30");
-  const [label, setLabel] = useState(simulation ? "Simulation task" : "");
+  const [label, setLabel] = useState("");
+
+  function prepareAudio() {
+    if (!window.AudioContext) return null;
+    try {
+      const context = audioContext.current ?? new AudioContext();
+      audioContext.current = context;
+      void context.resume().catch(() => {});
+      return context;
+    } catch { return null; }
+  }
+
+  useEffect(() => () => { void audioContext.current?.close().catch(() => {}); }, []);
 
   useEffect(() => {
-    if (simulation || timer.status !== "running") return;
+    const saved = saveTimerState(timer);
+    setTimerSaveFailed(timer.status !== "idle" && !saved);
+  }, [timer]);
+
+  function toggleSound() {
+    const next = !soundOn;
+    setSoundOn(next);
+    try { window.localStorage.setItem("focus-valley-sound", next ? "on" : "off"); }
+    catch { /* The preference remains active for this tab. */ }
+    if (next) prepareAudio();
+  }
+
+  useEffect(() => {
+    if (timer.status !== "running") return;
     const interval = window.setInterval(() => {
       const time = Date.now();
       setNow(time);
       dispatch({ type: "tick", now: time });
     }, 250);
     return () => window.clearInterval(interval);
-  }, [timer.status, simulation]);
+  }, [timer.status]);
 
   useEffect(() => {
-    if (timer.lastCompletedFocus && handledCompletions.current < timer.completedFocusDurationsMs.length) {
-      handledCompletions.current = timer.completedFocusDurationsMs.length;
+    if (timer.lastCompletedFocus && handledCompletion.current !== timer.lastCompletedFocus.id) {
+      handledCompletion.current = timer.lastCompletedFocus.id;
+      if (soundOn && audioContext.current?.state === "running") {
+        try { playTimerSound(audioContext.current, "end"); }
+        catch { /* Audio failure must not block a completed task. */ }
+      }
       onFocusComplete(timer.lastCompletedFocus);
     }
-  }, [timer.lastCompletedFocus, timer.completedFocusDurationsMs.length, onFocusComplete]);
+  }, [timer.lastCompletedFocus, onFocusComplete, soundOn]);
+
+  useEffect(() => {
+    if (timer.longBreakFinishedId && handledLongBreak.current !== timer.longBreakFinishedId) {
+      handledLongBreak.current = timer.longBreakFinishedId;
+      onLongBreakFinished();
+    }
+  }, [timer.longBreakFinishedId, onLongBreakFinished]);
 
   useEffect(() => {
     onFocusActiveChange(timer.kind === "focus" && timer.status !== "idle");
@@ -56,10 +107,17 @@ export const FocusForm = ({ target, onFocusComplete, onFocusStart, onFocusActive
   const startFocus = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const minutes = Number(duration === "custom" ? customMinutes : duration);
-    const time = simulation ? now : Date.now();
+    const time = Date.now();
     setNow(time);
     if (!target) return;
-    dispatch({ type: "startFocus", id: crypto.randomUUID(), label, minutes, now: time, target });
+    if (soundOn) {
+      const context = prepareAudio();
+      if (context) {
+        try { playTimerSound(context, "start"); }
+        catch { /* Audio failure must not block the timer. */ }
+      }
+    }
+    dispatch({ type: "startFocus", label, minutes, now: time, target });
   };
 
   const remainingMs =
@@ -84,29 +142,15 @@ export const FocusForm = ({ target, onFocusComplete, onFocusStart, onFocusActive
   const act = (
     type: "pause" | "resume" | "cancel" | "skipBreak",
   ) => {
-    const time = simulation ? now : Date.now();
+    const time = Date.now();
     setNow(time);
     dispatch({ type, now: time });
-  };
-
-  const advance = (milliseconds: number) => {
-    const time = now + milliseconds;
-    setNow(time);
-    dispatch({ type: "tick", now: time });
   };
 
   return (
     <>
       <h2 id="timer-heading">Focus timer</h2>
-      {simulation && <section className="simulation-clock" aria-label="Simulation clock">
-        <p>Time advances only with these controls. Pause and cancel use the normal game rules.</p>
-        <div className="choices">
-          <button type="button" onClick={() => advance(1000)} disabled={timer.status === "idle"}>+1 second</button>
-          <button type="button" onClick={() => advance(60_000)} disabled={timer.status === "idle"}>+1 minute</button>
-          <button type="button" onClick={() => advance(300_000)} disabled={timer.status === "idle"}>+5 minutes</button>
-          <button type="button" onClick={() => advance(Math.max(0, timer.deadline - now))} disabled={timer.status !== "running"}>Finish current timer</button>
-        </div>
-      </section>}
+      <button type="button" className="sound-toggle" aria-pressed={soundOn} onClick={toggleSound}>Sound: {soundOn ? "on" : "off"}</button>
       {timer.status === "idle" ? (
         <form onSubmit={startFocus}>
           <label htmlFor="focus-label">What are you working on?</label>
@@ -232,9 +276,8 @@ export const FocusForm = ({ target, onFocusComplete, onFocusStart, onFocusActive
       <p className="notice" role="status">
         {timer.notice}
       </p>
-      <p className="session-count">
-        Completed focus sessions: {timer.completedFocusDurationsMs.length}
-      </p>
+      {timerSaveFailed && <p role="alert">Timer recovery is unavailable in this browser. Keep this tab open until focus ends.</p>}
+      <p className="session-count">Sessions toward long break: {timer.completedFocusDurationsMs.length} / 4</p>
     </>
   );
 };

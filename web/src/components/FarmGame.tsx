@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { activeBed, clearPenProduce, completeFocus, createFarm, openFarmDay, previewFocus, SEASON_CONTENT, spendBonus } from "../game/farm.ts";
-import type { CompletedFocus } from "../reducers/timer";
+import { activeBed, clearPenProduce, completeFocus, createFarm, openFarmDay, previewFocus, SEASONS, SEASON_CONTENT, spendBonus } from "../game/farm.ts";
+import type { CompletedFocus, TimerState } from "../reducers/timer";
 import { FarmCanvas } from "./FarmCanvas";
 import { FocusForm } from "./FocusForm";
 import { ItemSprite } from "./ItemSprite";
 import { LockOverlay } from "./LockOverlay";
 import { Inventory } from "./Inventory";
+import { HowToPlay } from "./HowToPlay";
 import { APPEARANCE_OPTIONS } from "../game/avatar";
 import { downloadFarm, loadFarm, saveFarm } from "../game/save";
+import { clearTimerState, loadTimerState } from "../reducers/timerSave";
 
 const AVATAR_GROUPS = [
   { key: "hair", label: "Hair" },
@@ -16,25 +18,48 @@ const AVATAR_GROUPS = [
   { key: "pants", label: "Pants" },
 ] as const;
 
-export function GuestFarm({ onSeasonChange, simulationSeason }: { onSeasonChange: (season: Season) => void; simulationSeason?: Season }) {
-  const [farm, setFarm] = useState(() => {
-    const initial = createFarm(Date.now(), Intl.DateTimeFormat().resolvedOptions().timeZone);
-    if (simulationSeason) initial.progress.season = simulationSeason;
-    return initial;
-  });
+export function FarmGame({ onSeasonChange }: { onSeasonChange: (season: Season) => void }) {
+  const [farm, setFarm] = useState(() => createFarm(Date.now(), Intl.DateTimeFormat().resolvedOptions().timeZone));
   const farmRef = useRef(farm);
+  const saveQueue = useRef(Promise.resolve());
+  const [farmLoaded, setFarmLoaded] = useState(false);
+  const [recovery, setRecovery] = useState<TimerState | null>(null);
+  const [restoredTimer, setRestoredTimer] = useState<TimerState | null>(null);
   const [selection, setSelection] = useState<FocusTarget | null>(null);
   const [focusActive, setFocusActive] = useState(false);
   const [focusRunning, setFocusRunning] = useState(false);
   const [previewIntervals, setPreviewIntervals] = useState<RunningInterval[]>([]);
-  const [timerOpen, setTimerOpen] = useState(!!simulationSeason);
+  const [timerOpen, setTimerOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [bonusMinutes, setBonusMinutes] = useState("1");
   const [error, setError] = useState("");
-  const [saveStatus, setSaveStatus] = useState(simulationSeason ? "Simulation · never saved" : "Loading saved farm…");
+  const [saveStatus, setSaveStatus] = useState("Loading saved farm…");
+  useEffect(() => {
+    if (!farmLoaded || !import.meta.env.PROD || !("serviceWorker" in navigator)) return;
+    const nextSeason = SEASONS[(SEASONS.indexOf(farm.progress.season) + 1) % SEASONS.length];
+    let cancelled = false;
+    const cacheNextSeason = () => {
+      if (!navigator.onLine) return;
+      void navigator.serviceWorker.ready.then(registration => {
+        if (!cancelled) registration.active?.postMessage({ type: "CACHE_SEASON", season: nextSeason });
+      });
+    };
+    cacheNextSeason();
+    window.addEventListener("online", cacheNextSeason);
+    navigator.serviceWorker.addEventListener("controllerchange", cacheNextSeason);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("online", cacheNextSeason);
+      navigator.serviceWorker.removeEventListener("controllerchange", cacheNextSeason);
+    };
+  }, [farmLoaded, farm.progress.season]);
   const avatarPanel = useRef<HTMLDialogElement>(null);
   const focusPanel = useRef<HTMLDialogElement>(null);
+  const recoveryDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (recovery && !recoveryDialog.current?.open) recoveryDialog.current?.showModal();
+  }, [recovery]);
   useEffect(() => {
     const viewport = window.matchMedia("(max-width: 767px)");
     const syncPanels = () => [[avatarPanel.current, avatarOpen], [focusPanel.current, timerOpen]].forEach(([panel, open]) => {
@@ -48,28 +73,54 @@ export function GuestFarm({ onSeasonChange, simulationSeason }: { onSeasonChange
     return () => viewport.removeEventListener("change", syncPanels);
   }, [avatarOpen, timerOpen]);
   useEffect(() => {
-    if (simulationSeason) return;
     let cancelled = false;
     loadFarm().then(async saved => {
       if (cancelled) return;
-      const next = saved ? openFarmDay(saved, Date.now()) : farmRef.current;
+      const savedTimer = saved ? loadTimerState() : null;
+      if (!saved) clearTimerState();
+      const pendingCompletion = savedTimer?.lastCompletedFocus && !saved?.sessions.some(session => session.id === savedTimer.lastCompletedFocus?.id);
+      const next = saved ? savedTimer?.kind === "focus" || pendingCompletion ? saved : openFarmDay(saved, Date.now()) : farmRef.current;
       farmRef.current = next;
       setFarm(next);
+      if (savedTimer?.kind === "focus") {
+        setSelection(savedTimer.target);
+        setRecovery(savedTimer);
+      } else {
+        setRestoredTimer(savedTimer);
+        if (savedTimer?.kind === "break" && savedTimer.status !== "idle") setTimerOpen(true);
+      }
       await saveFarm(next);
-      if (!cancelled) setSaveStatus("Saved on this device");
-    }).catch(() => { if (!cancelled) setSaveStatus("Local save unavailable"); });
+      if (!cancelled) { setSaveStatus("Saved on this device"); setFarmLoaded(true); }
+    }).catch(() => { if (!cancelled) { setSaveStatus("Local save unavailable"); setFarmLoaded(true); } });
     return () => { cancelled = true; };
-  }, [simulationSeason]);
+  }, []);
   async function persistFarm(next: FarmState) {
     farmRef.current = next;
     setFarm(next);
-    if (simulationSeason) return;
     setSaveStatus("Saving…");
-    try { await saveFarm(next); setSaveStatus("Saved on this device"); }
+    try {
+      saveQueue.current = saveQueue.current.catch(() => {}).then(() => saveFarm(next));
+      await saveQueue.current;
+      if (farmRef.current === next) setSaveStatus("Saved on this device");
+    }
     catch { setSaveStatus("Could not save on this device"); setError("Your latest farm change could not be saved. Keep this tab open and try again."); }
   }
+  function discardRecoveredTimer() {
+    clearTimerState();
+    setSelection(null);
+    setRecovery(null);
+    const next = openFarmDay(farmRef.current, Date.now());
+    if (next !== farmRef.current) void persistFarm(next);
+  }
+  function focusActiveChanged(active: boolean) {
+    setFocusActive(active);
+    if (!active) {
+      const next = openFarmDay(farmRef.current, Date.now());
+      if (next !== farmRef.current) void persistFarm(next);
+    }
+  }
   useEffect(() => {
-    if (focusActive || simulationSeason) return;
+    if (focusActive || recovery) return;
     const refresh = () => {
       const current = farmRef.current;
       const next = openFarmDay(current, Date.now());
@@ -78,7 +129,7 @@ export function GuestFarm({ onSeasonChange, simulationSeason }: { onSeasonChange
     const interval = window.setInterval(refresh, 60_000);
     window.addEventListener("visibilitychange", refresh);
     return () => { window.clearInterval(interval); window.removeEventListener("visibilitychange", refresh); };
-  }, [focusActive, simulationSeason]);
+  }, [focusActive, recovery]);
   const { crops, animals } = SEASON_CONTENT[farm.progress.season];
   const availableBonusMinutes = (farm.bonusBankSeconds ?? 0) / 60;
   const requestedBonusMinutes = Number(bonusMinutes);
@@ -105,12 +156,21 @@ export function GuestFarm({ onSeasonChange, simulationSeason }: { onSeasonChange
   }
   async function complete(focus: CompletedFocus) {
     try {
-      const next = completeFocus(farmRef.current, focus);
+      const current = farmRef.current;
+      const completed = completeFocus(current, focus);
       setPreviewIntervals([]);
       if (focus.target?.kind === "crop") setSelection(null);
       setError("");
+      if (completed === current) return;
+      const breakCycleStart = current.breakCycleStart ?? current.sessions.length - current.sessions.length % 4;
+      const next = { ...completed, breakCycleStart };
       await persistFarm(next);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not collect this session. Keep this tab open."); }
+  }
+  function finishLongBreak() {
+    const current = farmRef.current;
+    if (current.breakCycleStart !== undefined && current.sessions.length - current.breakCycleStart === 4)
+      void persistFarm({ ...current, breakCycleStart: current.sessions.length });
   }
   function useBonus() {
     if (!target || focusActive || !validBonusAmount) return;
@@ -126,11 +186,12 @@ export function GuestFarm({ onSeasonChange, simulationSeason }: { onSeasonChange
     const current = farmRef.current;
     void persistFarm({ ...current, avatar: { ...current.avatar, [group]: value } as FarmerAppearance });
   }
+  if (!farmLoaded) return <div className="farm-loading">Loading farm…</div>;
   return <>
     <FarmCanvas farm={displayFarm} active={target?.kind === "crop" ? displayBed : null} activeAnimal={target?.kind === "animal" ? target.animalId : null} running={focusRunning} />
     <aside className="game-hud" aria-label="Farm controls">
       <div className="hud-buttons">
-        <button type="button" className="hud-toggle" disabled={!!simulationSeason} onClick={() => downloadFarm(farm)}>Download save</button>
+        <button type="button" className="hud-toggle" onClick={() => downloadFarm(farm)}>Export save</button>
         <button type="button" className="hud-toggle" onClick={() => setInventoryOpen(true)}>Inventory</button>
         <div className="hud-menu-item">
           <button type="button" className="hud-toggle" aria-expanded={avatarOpen} aria-controls="avatar-tools" onClick={() => { setAvatarOpen(open => !open); setTimerOpen(false); }}>{avatarOpen ? "Close farmer" : "Farmer"}</button>
@@ -158,6 +219,7 @@ export function GuestFarm({ onSeasonChange, simulationSeason }: { onSeasonChange
         <button type="button" className="mobile-panel-close" onClick={() => setTimerOpen(false)}>Close</button>
         <h2 id="focus-title" className="visually-hidden">Focus and planting</h2>
         <p className="guest-status">Your farm · {farm.progress.season} · {saveStatus}</p>
+        <HowToPlay />
         <section aria-label="Focus target" className="planting-controls">
           <fieldset className="farm-item-section" hidden={focusRunning}><legend>Crops</legend><div className="farm-item-row">
             {crops.map(crop => <button key={crop} type="button" className="farm-item" aria-pressed={target?.kind === "crop" && target.cropId === crop} disabled={focusActive} onClick={() => setSelection({ kind: "crop", cropId: crop })}>
@@ -168,7 +230,7 @@ export function GuestFarm({ onSeasonChange, simulationSeason }: { onSeasonChange
             {animals.map(animal => {
               const unlocked = farm.progress.unlockedAnimals.includes(animal);
               return <button key={animal} type="button" className="farm-item" aria-pressed={target?.kind === "animal" && target.animalId === animal} disabled={focusActive || !unlocked} onClick={() => setSelection({ kind: "animal", animalId: animal })}>
-                <ItemSprite item={animal} animal />{!unlocked && <LockOverlay />}<span>{animal.replaceAll("-", " ")}</span>
+                {(unlocked || farm.progress.season === "spring") && <ItemSprite item={animal} animal />}{!unlocked && <LockOverlay />}<span>{animal.replaceAll("-", " ")}</span>
               </button>;
             })}
           </div></fieldset>
@@ -184,19 +246,22 @@ export function GuestFarm({ onSeasonChange, simulationSeason }: { onSeasonChange
           </div>
           <p>Harvests collect automatically.</p>
         </section>
-        <FocusForm target={target} onFocusStart={start} onFocusComplete={complete} onFocusActiveChange={setFocusActive} onFocusRunningChange={setFocusRunning} onFocusPreview={setPreviewIntervals} plantedSeconds={target?.kind === "crop" ? tile?.focusSeconds ?? 0 : target?.kind === "animal" ? farm.pens[target.animalId]?.focusSeconds ?? 0 : 0} simulation={!!simulationSeason} />
-        {simulationSeason && <section className="simulation-results" aria-label="Simulation results" aria-live="polite">
-          <h3>Simulation results</h3>
-          <p>{farm.sessions.length} completed tasks · {farm.progress.totalHarvests} completed farm cycles · {farm.progress.unlockedAreaCount} unlocked areas</p>
-          <p>{displayFarm.progress.totalHarvests - farm.progress.totalHarvests} farm cycles pending completion. Cancelling discards pending growth.</p>
-          <p>Last task earned: {(farm.sessions.at(-1)?.bonusSeconds ?? 0) / 60} bonus minutes · credit: {availableBonusMinutes} / 15.</p>
-          <p>Committed inventory: {Object.entries(farm.inventory).map(([item, count]) => `${item.split(":")[1].replaceAll("-", " ")}: ${count}`).join(" · ") || "empty"}</p>
-        </section>}
+        {farmLoaded && !recovery ? <FocusForm target={target} onFocusStart={start} onFocusComplete={complete} onLongBreakFinished={finishLongBreak} onFocusActiveChange={focusActiveChanged} onFocusRunningChange={setFocusRunning} onFocusPreview={setPreviewIntervals} plantedSeconds={target?.kind === "crop" ? tile?.focusSeconds ?? 0 : target?.kind === "animal" ? farm.pens[target.animalId]?.focusSeconds ?? 0 : 0} cycleDurationsMs={farm.sessions.slice(farm.breakCycleStart ?? farm.sessions.length - farm.sessions.length % 4).map(session => session.focusSeconds * 1000)} longBreakPending={farm.breakCycleStart !== undefined && farm.sessions.length - farm.breakCycleStart === 4} lastSessionId={farm.sessions.at(-1)?.id ?? ""} restoredTimer={restoredTimer} /> : <p>{recovery ? "Confirm your interrupted task to continue." : "Loading farm…"}</p>}
         {error && <p role="alert">{error}</p>}
           </dialog>
         </div>
       </div>
     </aside>
+    {recovery && <dialog ref={recoveryDialog} className="recovery-dialog" aria-labelledby="recovery-title" onCancel={event => event.preventDefault()}>
+      <h2 id="recovery-title">Return to your task?</h2>
+      <p><strong>{recovery.label}</strong> was interrupted when the farm closed.</p>
+      <p>{recovery.status === "paused" ? "Your remaining focus time is saved." : "The timer kept its deadline while you were away."}</p>
+      <p>Discarding this task gives no focus progress.</p>
+      <div className="recovery-actions">
+        <button type="button" className="primary" onClick={() => { setRestoredTimer(recovery); setRecovery(null); setTimerOpen(true); }}>Continue task</button>
+        <button type="button" onClick={discardRecoveredTimer}>Discard task</button>
+      </div>
+    </dialog>}
     {inventoryOpen && <Inventory farm={farm} onClose={() => setInventoryOpen(false)} />}
     <p className="movement-hint" role="status">{focusRunning ? `Your farmer is tending ${target?.kind === "animal" ? "the selected pen" : "the active bed"}.` : "Click the farm, then use arrow keys — or tap a path to walk."}</p>
   </>;

@@ -13,6 +13,6 @@ prompts.json          Generation prompts and source-sheet metadata
 transparency-preview.html
 ```
 
-Runtime crops and animals are sliced from the source sheets using coordinates in `web/src/game/seasonalFrames.ts`. The PNGs remain the editable source; aligned runtime frames are not generated for every crop yet. Tree artwork is retained only if present in source prompts; trees are out of game scope.
+Runtime crop frames use `web/src/game/cropGrowthFrames.ts`; animal poses use `web/src/game/seasonalFrames.ts`. The PNGs remain editable source art. Some review sheets are not shipped in the web build. Trees are out of game scope.
 
 Generated seasonal source sheets and review status are documented in `prompts.json`. Open `transparency-preview.html` to inspect roster transparency over light, dark, and grass backgrounds.

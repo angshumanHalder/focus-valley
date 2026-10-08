@@ -36,7 +36,6 @@ export function animalPopulation(animal: string): number {
   return ["chicken", "rabbit", "duck", "turkey"].includes(animal) ? 4 : 2;
 }
 
-// Visual preview choices; production rewards are not wired to these samples yet.
 export const ANIMAL_PRODUCTS: Record<string, "egg" | "wool" | "milk"> = {
   chicken: "egg", rabbit: "wool", cow: "milk", goat: "milk", duck: "egg",
   "water-buffalo": "milk", alpaca: "wool", turkey: "egg", sheep: "wool", yak: "wool",
