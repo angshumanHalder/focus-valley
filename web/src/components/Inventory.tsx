@@ -51,7 +51,7 @@ export function Inventory({ farm, onClose }: { farm: FarmState; onClose: () => v
         const sessions = farm.sessions.filter(s => targetItemId(s.target) === i.id);
         const minutes = sessions.reduce((total, s) => total + s.focusSeconds / 60, 0);
         const locked = kind === "animal" && !farm.progress.unlockedAnimals.includes(i.source);
-        return <button key={i.id} type="button" aria-pressed={itemId === i.id} disabled={locked} onClick={() => setItemId(i.id)}>{!locked && <ItemSprite item={i.source} animal={kind === "animal"} />}<strong>{i.name}</strong><span>{farm.inventory[i.id] ?? 0} collected</span><small>{minutes.toFixed(1)} focus min · {sessions.length} tasks</small>{locked && <LockOverlay />}</button>;
+        return <button key={i.id} type="button" aria-pressed={itemId === i.id} disabled={locked} onClick={() => setItemId(i.id)}><ItemSprite item={i.source} animal={kind === "animal"} /><strong>{i.name}</strong><span>{farm.inventory[i.id] ?? 0} collected</span><small>{minutes.toFixed(1)} focus min · {sessions.length} tasks</small>{locked && <LockOverlay />}</button>;
       })}
     </div></section>)}
     <section className="inventory-activity" aria-label="Activity statistics"><div className="inventory-heading"><h3>{item?.name ?? "All activity"}</h3>{item && <button type="button" onClick={() => setItemId(undefined)}>Show all activity</button>}</div>
